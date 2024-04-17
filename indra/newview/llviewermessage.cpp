@@ -1654,8 +1654,9 @@ void inventory_offer_mute_callback(const LLUUID& blocked_id,
 		const LLUUID& blocked_id;
 	};
 
-	LLNotificationsUI::LLChannelManager::getInstance()->killToastsFromChannel(LLUUID(
-			gSavedSettings.getString("NotificationChannelUUID")), OfferMatcher(blocked_id));
+    LLNotificationsUI::LLChannelManager::getInstance()->killToastsFromChannel(
+        LLNotificationsUI::NOTIFICATION_CHANNEL_UUID,
+        OfferMatcher(blocked_id));
 }
 
 
@@ -4165,6 +4166,12 @@ void process_avatar_animation(LLMessageSystem *mesgsys, void **user_data)
 					LLVOAvatar::AnimSourceIterator anim_it = avatarp->mAnimationSources.find(object_id);
 					for (;anim_it != avatarp->mAnimationSources.end(); ++anim_it)
 					{
+						if (anim_it->first != object_id)
+						{
+							// elements with the same key are always contiguous, bail if we went past the
+							// end of this object's animations
+							break;
+						}
 						if (anim_it->second == animation_id)
 						{
 							anim_found = TRUE;
@@ -5775,8 +5782,9 @@ void script_question_mute(const LLUUID& task_id, const std::string& object_name)
         const LLUUID& blocked_id;
     };
 
-    LLNotificationsUI::LLChannelManager::getInstance()->killToastsFromChannel(LLUUID(
-            gSavedSettings.getString("NotificationChannelUUID")), OfferMatcher(task_id));
+    LLNotificationsUI::LLChannelManager::getInstance()->killToastsFromChannel(
+        LLNotificationsUI::NOTIFICATION_CHANNEL_UUID,
+        OfferMatcher(task_id));
 }
 
 static LLNotificationFunctorRegistration script_question_cb_reg_1("ScriptQuestion", script_question_cb);
