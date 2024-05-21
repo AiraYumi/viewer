@@ -2559,6 +2559,18 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
         return;
     }
 
+    if (chat.mChatType == CHAT_TYPE_DEBUG_MSG)
+    {
+        if(gSavedSettings.getBOOL("ShowScriptErrors") == FALSE)
+            return;
+
+        // don't process debug messages from not owned objects, see EXT-7762
+        if (gAgentID != chat.mOwnerID)
+        {
+            return;
+        }
+    }
+
     BOOL is_audible = (CHAT_AUDIBLE_FULLY == chat.mAudible);
     chatter = gObjectList.findObject(from_id);
     if (chatter)
@@ -2709,8 +2721,17 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
         LLSD args;
         chat.mOwnerID = owner_id;
 
+        // don't call notification for debug messages from not owned objects
+        if (chat.mChatType == CHAT_TYPE_DEBUG_MSG)
+        {
+            if (gAgentID != chat.mOwnerID)
+            {
+                return;
+            }
+        }
+
         LLTranslate::instance().logCharsSeen(mesg.size());
-        if (gSavedSettings.getBOOL("TranslateChat") && chat.mSourceType != CHAT_SOURCE_SYSTEM)
+        if (LLTranslate::shouldTranslate(chat))
         {
             if (chat.mChatStyle == CHAT_STYLE_IRC)
             {
@@ -2720,9 +2741,10 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
             const std::string to_lang = LLTranslate::getTranslateLanguage();
 
             LLTranslate::instance().logCharsSent(mesg.size());
+            const std::string detected_lang;
             LLTranslate::translateMessage(from_lang, to_lang, mesg,
-                boost::bind(&translateSuccess, chat, args, mesg, from_lang, _1, _2),
-                boost::bind(&translateFailure, chat, args, _1, _2));
+                                          boost::bind(&translateSuccess, chat, args, mesg, from_lang, _1, _2),
+                                          boost::bind(&translateFailure, chat, args, _1, _2));
 
         }
         else
@@ -2730,14 +2752,7 @@ void process_chat_from_simulator(LLMessageSystem *msg, void **user_data)
             LLNotificationsUI::LLNotificationManager::instance().onChat(chat, args);
         }
 
-        // don't call notification for debug messages from not owned objects
-        if (chat.mChatType == CHAT_TYPE_DEBUG_MSG)
-        {
-            if (gAgentID != chat.mOwnerID)
-            {
-                return;
-            }
-        }
+
 
         if (mesg != "")
         {
