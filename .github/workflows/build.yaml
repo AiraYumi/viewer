@@ -39,19 +39,20 @@ jobs:
     needs: setvar
     strategy:
       matrix:
-        runner: [windows-large, macos-12-xl, linux-large]
-        configuration: [Release, ReleaseOS]
+        runner: [windows-large, macos-12-xl]
+        configuration: [Release]
         Linden: [true]
         include:
           - runner: macos-12-xl
             developer_dir: "/Applications/Xcode_14.0.1.app/Contents/Developer"
-        exclude:
           - runner: windows-large
             configuration: ReleaseOS
+            Linden: false
+          - runner: linux-large
+            configuration: ReleaseOS
+        exclude:
           - runner: macos-12-xl
             configuration: ReleaseOS
-          - runner: linux-large
-            configuration: Release
     runs-on: ${{ matrix.runner }}
     outputs:
       viewer_channel: ${{ steps.build.outputs.viewer_channel }}
