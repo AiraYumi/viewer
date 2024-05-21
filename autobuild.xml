@@ -1777,36 +1777,42 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>b48b7ac0792d3ea8f087d99d9e4a29d8</string>
+              <string>6cc1585dba85b0226a2e7033a7e2a2ceaae7c983</string>
+              <key>hash_algorithm</key>
+              <string>sha1</string>
               <key>url</key>
-              <string>https://automated-builds-secondlife-com.s3.amazonaws.com/ct2/104415/914944/mikktspace-1-darwin64-574859.tar.bz2</string>
+              <string>https://github.com/secondlife/3p-mikktspace/releases/download/v1-5cee1f4/mikktspace-1-darwin64-5cee1f4.tar.zst</string>
             </map>
             <key>name</key>
             <string>darwin64</string>
-          </map>
-          <key>windows</key>
-          <map>
-            <key>archive</key>
-            <map>
-              <key>hash</key>
-              <string>0a016b9c0c1e2c0b557e0124094da6c5</string>
-              <key>url</key>
-              <string>https://automated-builds-secondlife-com.s3.amazonaws.com/ct2/104407/914918/mikktspace-1-windows-574859.tar.bz2</string>
-            </map>
-            <key>name</key>
-            <string>windows</string>
           </map>
           <key>windows64</key>
           <map>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>02e9e5b6fe6788f4d2babb83ec544843</string>
+              <string>6b7d01ad54e4a88a001f66840c32329cedb28202</string>
+              <key>hash_algorithm</key>
+              <string>sha1</string>
               <key>url</key>
-              <string>https://automated-builds-secondlife-com.s3.amazonaws.com/ct2/104406/914909/mikktspace-1-windows64-574859.tar.bz2</string>
+              <string>https://github.com/secondlife/3p-mikktspace/releases/download/v1-5cee1f4/mikktspace-1-windows64-5cee1f4.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
+          </map>
+          <key>linux64</key>
+          <map>
+            <key>archive</key>
+            <map>
+              <key>hash</key>
+              <string>edc9782bf209e17ad1845498b42f16d733582082</string>
+              <key>hash_algorithm</key>
+              <string>sha1</string>
+              <key>url</key>
+              <string>https://github.com/secondlife/3p-mikktspace/releases/download/v1-5cee1f4/mikktspace-1-linux64-5cee1f4.tar.zst</string>
+            </map>
+            <key>name</key>
+            <string>linux64</string>
           </map>
         </map>
         <key>license</key>
@@ -2903,51 +2909,29 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
       <map>
         <key>platforms</key>
         <map>
-          <key>darwin64</key>
+          <key>common</key>
           <map>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>8cff2060843db3db788511ee34a8e8cc</string>
+              <string>8e365eff8dcace48d91e2530f8b13e420849aefc</string>
+              <key>hash_algorithm</key>
+              <string>sha1</string>
               <key>url</key>
-              <string>https://automated-builds-secondlife-com.s3.amazonaws.com/ct2/101316/891509/vulkan_gltf-1-darwin64-572743.tar.bz2</string>
+              <string>https://github.com/secondlife/3p-vulkan-gltf-pbr/releases/download/v1.0.0-d7c372f/vulkan_gltf-1.0.0-common-d7c372f.tar.zst</string>
             </map>
             <key>name</key>
-            <string>darwin64</string>
-          </map>
-          <key>windows</key>
-          <map>
-            <key>archive</key>
-            <map>
-              <key>hash</key>
-              <string>58eea384be49ba756ce9c5e66669540b</string>
-              <key>url</key>
-              <string>https://automated-builds-secondlife-com.s3.amazonaws.com/ct2/101318/891520/vulkan_gltf-1-windows-572743.tar.bz2</string>
-            </map>
-            <key>name</key>
-            <string>windows</string>
-          </map>
-          <key>windows64</key>
-          <map>
-            <key>archive</key>
-            <map>
-              <key>hash</key>
-              <string>79b6a11622c2f83cfc2b7cd1fafb867b</string>
-              <key>url</key>
-              <string>https://automated-builds-secondlife-com.s3.amazonaws.com/ct2/101319/891521/vulkan_gltf-1-windows64-572743.tar.bz2</string>
-            </map>
-            <key>name</key>
-            <string>windows64</string>
+            <string>common</string>
           </map>
         </map>
         <key>license</key>
         <string>Copyright (c) 2018 Sascha Willems</string>
         <key>license_file</key>
-        <string>LICENSES/vulkan_gltf.txt</string>
+        <string>vulkan_gltf.txt</string>
         <key>copyright</key>
         <string>Copyright (c) 2018 Sascha Willems</string>
         <key>version</key>
-        <string>1</string>
+        <string>1.0.0</string>
         <key>name</key>
         <string>vulkan_gltf</string>
         <key>canonical_repo</key>
