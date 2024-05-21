@@ -3,7 +3,7 @@
  * @author Nat Goodspeed
  * @date   2021-09-30
  * @brief  Queue used for inter-thread work passing.
- *
+ * 
  * $LicenseInfo:firstyear=2021&license=viewerlgpl$
  * Copyright (c) 2021, Linden Research, Inc.
  * $/LicenseInfo$
@@ -13,6 +13,7 @@
 #define LL_WORKQUEUE_H
 
 #include "llcoros.h"
+#include "llevents.h"
 #include "llexception.h"
 #include "llinstancetracker.h"
 #include "llinstancetrackersubclass.h"
@@ -193,6 +194,8 @@ namespace LL
         static void error(const std::string& msg);
         static std::string makeName(const std::string& name);
         void callWork(const Work& work);
+
+        LLTempBoundListener mStopListener;
 
     private:
         virtual Work pop_() = 0;

@@ -3,7 +3,7 @@
  * @author Nat Goodspeed
  * @date   2021-10-21
  * @brief  Implementation for threadpool.
- *
+ * 
  * $LicenseInfo:firstyear=2021&license=viewerlgpl$
  * Copyright (c) 2021, Linden Research, Inc.
  * $/LicenseInfo$
@@ -18,6 +18,7 @@
 // external library headers
 // other Linden headers
 #include "commoncontrol.h"
+#include "llcoros.h"
 #include "llerror.h"
 #include "llevents.h"
 #include "llsd.h"
@@ -90,20 +91,14 @@ void LL::ThreadPoolBase::start()
         return;
     }
 
-    // Listen on "LLApp", and when the app is shutting down, close the queue
-    // and join the workers.
-    LLEventPumps::instance().obtain("LLApp").listen(
+    // When the app is shutting down, close the queue and join the workers.
+    mStopListener = LLCoros::getStopListener(
         mName,
-        [this](const LLSD& stat)
+        [this](const LLSD& status)
         {
-            std::string status(stat["status"]);
-            if (status != "running")
-            {
-                // viewer is starting shutdown -- proclaim the end is nigh!
-                LL_DEBUGS("ThreadPool") << mName << " saw " << status << LL_ENDL;
-                close();
-            }
-            return false;
+            // viewer is starting shutdown -- proclaim the end is nigh!
+            LL_DEBUGS("ThreadPool") << mName << " saw " << status << LL_ENDL;
+            close();
         });
 }
 

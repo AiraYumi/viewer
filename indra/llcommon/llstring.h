@@ -37,7 +37,9 @@
 #include <algorithm>
 #include <vector>
 #include <map>
+#include <type_traits>
 #include "llformat.h"
+#include "stdtypes.h"
 
 #if LL_LINUX
 #include <wctype.h>
@@ -520,11 +522,38 @@ struct ll_convert_impl
     TO operator()(const FROM& in) const;
 };
 
-// Use a function template to get the nice ll_convert<TO>(from_value) API.
-template<typename TO, typename FROM>
-TO ll_convert(const FROM& in)
+/**
+ * somefunction(ll_convert(data))
+ * target = ll_convert(data)
+ * totype otherfunc(const fromtype& data)
+ * {
+ *     // ...
+ *     return ll_convert(data);
+ * }
+ * all infer both the FROM type and the TO type.
+ */
+template <typename FROM>
+class ll_convert
 {
-    return ll_convert_impl<TO, FROM>()(in);
+private:
+    const FROM& mRef;
+
+public:
+    ll_convert(const FROM& ref): mRef(ref) {}
+
+    template <typename TO>
+    inline operator TO() const
+    {
+        return ll_convert_impl<TO, std::decay_t<const FROM>>()(mRef);
+    }
+};
+
+// When the TO type must be explicit, use a function template to get
+// ll_convert_to<TO>(from_value) API.
+template<typename TO, typename FROM>
+TO ll_convert_to(const FROM& in)
+{
+    return ll_convert_impl<TO, std::decay_t<const FROM>>()(in);
 }
 
 // degenerate case
@@ -578,8 +607,8 @@ inline size_t ll_convert_length<char>   (const char*    zstr) { return std::strl
 // and longname(const string&, len) so calls written pre-ll_convert() will
 // work. Most of these overloads will be unified once we turn on C++17 and can
 // use std::string_view.
-// It also uses aliasmacro to ensure that both ll_convert<OUTSTR>(const char*)
-// and ll_convert<OUTSTR>(const string&) will work.
+// It also uses aliasmacro to ensure that both ll_convert(const char*)
+// and ll_convert(const string&) will work.
 #define ll_convert_forms(aliasmacro, OUTSTR, INSTR, longname)           \
 LL_COMMON_API OUTSTR longname(const INSTR::value_type* in, size_t len); \
 inline auto longname(const INSTR& in, size_t len)                       \
@@ -822,7 +851,7 @@ LL_COMMON_API std::string ll_convert_string_to_utf8_string(const std::string& in
 template<typename STRING>
 STRING windows_message(unsigned long error)
 {
-    return ll_convert<STRING>(windows_message<std::wstring>(error));
+    return ll_convert(windows_message<std::wstring>(error));
 }
 
 /// There's only one real implementation
@@ -1818,7 +1847,7 @@ auto LLStringUtilBase<T>::getoptenv(const std::string& key) -> boost::optional<s
     if (found)
     {
         // return populated boost::optional
-        return { ll_convert<string_type>(*found) };
+        return { ll_convert_to<string_type>(*found) };
     }
     else
     {
