@@ -1453,48 +1453,72 @@ LLVector3 LLAgent::getReferenceUpVector()
     return up_vector;
 }
 
-
 // Radians, positive is forward into ground
 //-----------------------------------------------------------------------------
 // pitch()
 //-----------------------------------------------------------------------------
 void LLAgent::pitch(F32 angle)
 {
+    if (fabs(angle) <= 1e-4)
+        return;
+
+    LLCoordFrame newCoordFrame(mFrameAgent);
+    newCoordFrame.pitch(angle);
+
+    // don't let user pitch if rotated 180 degree around the vertical axis
+    if ((newCoordFrame.getXAxis()[VX] * mFrameAgent.getXAxis()[VX] < 0) &&
+        (newCoordFrame.getXAxis()[VY] * mFrameAgent.getXAxis()[VY] < 0))
+        return;
+
     // don't let user pitch if pointed almost all the way down or up
+    LLVector3 skyward = getReferenceUpVector();
 
     // A dot B = mag(A) * mag(B) * cos(angle between A and B)
     // so... cos(angle between A and B) = A dot B / mag(A) / mag(B)
     //                                  = A dot B for unit vectors
+    F32 agent_camera_angle_from_skyward = acos(newCoordFrame.getAtAxis() * skyward) * RAD_TO_DEG;
 
-    LLVector3 skyward = getReferenceUpVector();
+    F32 min_angle = 1;
+    F32 max_angle = 179;
+    bool check_viewer_camera = false;
 
-    // clamp pitch to limits
-    if (angle >= 0.f)
+    if (gAgentCamera.getCameraMode() == CAMERA_MODE_THIRD_PERSON)
     {
-        const F32 look_down_limit = 179.f * DEG_TO_RAD;
-        F32 angle_from_skyward = acos(mFrameAgent.getAtAxis() * skyward);
-        if (angle_from_skyward + angle > look_down_limit)
+        // These values of min_angle and max_angle are obtained purely empirically
+        if (gAgentCamera.getCameraPreset() == CAMERA_PRESET_REAR_VIEW)
         {
-            angle = look_down_limit - angle_from_skyward;
+            min_angle = 10;
+            check_viewer_camera = true;
+        }
+        else if (gAgentCamera.getCameraPreset() == CAMERA_PRESET_GROUP_VIEW)
+        {
+            min_angle = 10;
+            max_angle = 170;
+            check_viewer_camera = true;
         }
     }
-    else if (angle < 0.f)
+    else if (gAgentCamera.getCameraMode() == CAMERA_MODE_MOUSELOOK)
     {
-        const F32 look_up_limit = 5.f * DEG_TO_RAD;
+        min_angle = 0.1;
+        max_angle = 179.9;
+    }
+
+    if ((angle < 0 && agent_camera_angle_from_skyward < min_angle) ||
+        (angle > 0 && agent_camera_angle_from_skyward > max_angle))
+        return;
+
+    if (check_viewer_camera)
+    {
         const LLVector3& viewer_camera_pos = LLViewerCamera::getInstance()->getOrigin();
         LLVector3 agent_focus_pos = getPosAgentFromGlobal(gAgentCamera.calcFocusPositionTargetGlobal());
         LLVector3 look_dir = agent_focus_pos - viewer_camera_pos;
-        F32 angle_from_skyward = angle_between(look_dir, skyward);
-        if (angle_from_skyward + angle < look_up_limit)
-        {
-            angle = look_up_limit - angle_from_skyward;
-        }
+        F32 viewer_camera_angle_from_skyward = angle_between(look_dir, skyward) * RAD_TO_DEG;
+        if ((angle < 0 && viewer_camera_angle_from_skyward < min_angle) ||
+            (angle > 0 && viewer_camera_angle_from_skyward > max_angle))
+            return;
     }
 
-    if (fabs(angle) > 1e-4)
-    {
-        mFrameAgent.pitch(angle);
-    }
+    mFrameAgent = newCoordFrame;
 }
 
 

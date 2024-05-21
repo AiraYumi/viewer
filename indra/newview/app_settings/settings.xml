@@ -91,7 +91,7 @@
       <key>Type</key>
       <string>S32</string>
       <key>Value</key>
-      <real>300.0</real>
+      <real>300</real>
     </map>
     <key>AckCollectTime</key>
     <map>
@@ -379,7 +379,7 @@
       <key>Value</key>
       <integer>0</integer>
     </map>
-    <key>AutoAcceptNewInventory</key>
+  <key>AutoAcceptNewInventory</key>
     <map>
       <key>Comment</key>
       <string>Automatically accept new notecards/textures/landmarks</string>
