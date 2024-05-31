@@ -22,7 +22,6 @@ set(cmake_SOURCE_FILES
         DragDrop.cmake
         EXPAT.cmake
         FindAutobuild.cmake
-        FMODSTUDIO.cmake
         FreeType.cmake
         GLEXT.cmake
         GLH.cmake

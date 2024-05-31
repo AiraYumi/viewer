@@ -655,72 +655,6 @@
         <key>description</key>
         <string>Expat is an XML parser library written in C</string>
       </map>
-      <key>fmodstudio</key>
-      <map>
-        <key>platforms</key>
-        <map>
-          <key>darwin64</key>
-          <map>
-            <key>archive</key>
-            <map>
-              <key>creds</key>
-              <string>github</string>
-              <key>hash</key>
-              <string>a2074b67de7ad4c04b5ca8f8f161506add9697b2</string>
-              <key>hash_algorithm</key>
-              <string>sha1</string>
-              <key>url</key>
-              <string>https://api.github.com/repos/secondlife/3p-fmodstudio/releases/assets/149207589</string>
-            </map>
-            <key>name</key>
-            <string>darwin64</string>
-          </map>
-          <key>linux64</key>
-          <map>
-            <key>archive</key>
-            <map>
-              <key>creds</key>
-              <string>github</string>
-              <key>hash</key>
-              <string>8c1b701648c077220dbc576c3d9aefbef47f8324</string>
-              <key>hash_algorithm</key>
-              <string>sha1</string>
-              <key>url</key>
-              <string>https://api.github.com/repos/secondlife/3p-fmodstudio/releases/assets/149207592</string>
-            </map>
-            <key>name</key>
-            <string>linux64</string>
-          </map>
-          <key>windows64</key>
-          <map>
-            <key>archive</key>
-            <map>
-              <key>creds</key>
-              <string>github</string>
-              <key>hash</key>
-              <string>7e0c3d50e8b99d8735c6c9596a72ded9ee2bc1c8</string>
-              <key>hash_algorithm</key>
-              <string>sha1</string>
-              <key>url</key>
-              <string>https://api.github.com/repos/secondlife/3p-fmodstudio/releases/assets/149207594</string>
-            </map>
-            <key>name</key>
-            <string>windows64</string>
-          </map>
-        </map>
-        <key>license</key>
-        <string>fmod</string>
-        <key>license_file</key>
-        <string>LICENSES/fmodstudio.txt</string>
-        <key>copyright</key>
-        <string>FMOD Studio by Firelight Technologies Pty Ltd.</string>
-        <key>version</key>
-        <string>2.02.20.c78ef55</string>
-        <key>name</key>
-        <string>fmodstudio</string>
-        <key>description</key>
-        <string>FMOD Studio API</string>
-      </map>
       <key>freetype</key>
       <map>
         <key>platforms</key>
@@ -3074,6 +3008,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
                   <string>-DADDRESS_SIZE:STRING=$AUTOBUILD_ADDRSIZE</string>
                   <string>-DROOT_PROJECT_NAME:STRING=SecondLife</string>
                   <string>-DINSTALL_PROPRIETARY=TRUE</string>
+                  <string>-DUSE_OPENAL:BOOL=ON</string>
                 </array>
               </map>
               <key>build</key>
@@ -3115,6 +3050,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
                   <string>-DADDRESS_SIZE:STRING=$AUTOBUILD_ADDRSIZE</string>
                   <string>-DROOT_PROJECT_NAME:STRING=SecondLife</string>
                   <string>-DINSTALL_PROPRIETARY=TRUE</string>
+                  <string>-DUSE_OPENAL:BOOL=ON</string>
                 </array>
               </map>
               <key>build</key>
