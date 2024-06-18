@@ -78,6 +78,7 @@ public:
         FFLOAD_EXE = 14,          // Note: EXE will be treated as ALL on Windows and Linux but not on Darwin
         FFLOAD_MATERIAL = 15,
         FFLOAD_MATERIAL_TEXTURE = 16,
+        FFLOAD_HDRI = 17,
     };
 
     enum ESaveFilter
@@ -172,7 +173,7 @@ private:
                                  void *userdata);
 #endif
 
-#if LL_LINUX
+#if LL_FLTK
     enum EType
     {
      eSaveFile, eOpenFile, eOpenMultiple
