@@ -24,20 +24,20 @@
  * $/LicenseInfo$
  */
 
-#ifndef LL_LLWINDOWSDL2_H
-#define LL_LLWINDOWSDL2_H
+#ifndef LL_LLWINDOWSDL3_H
+#define LL_LLWINDOWSDL3_H
 
 // Simple Directmedia Layer (http://libsdl.org/) implementation of LLWindow class
 
 #include "llwindow.h"
 #include "lltimer.h"
 
-#include "SDL2/SDL.h"
-#include "SDL2/SDL_endian.h"
+#include "SDL3/SDL.h"
+#include "SDL3/SDL_endian.h"
 
 #if LL_X11
 // get X11-specific headers for use in low-level stuff like copy-and-paste support
-#include "SDL2/SDL_syswm.h"
+#include "SDL3/SDL_syswm.h"
 #endif
 
 // AssertMacros.h does bad things.

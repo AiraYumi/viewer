@@ -23,11 +23,11 @@
  * $/LicenseInfo$
  */
 
-#ifndef LL_LLKEYBOARDSDL2_H
-#define LL_LLKEYBOARDSDL2_H
+#ifndef LL_LLKEYBOARDSDL3_H
+#define LL_LLKEYBOARDSDL3_H
 
 #include "llkeyboard.h"
-#include "SDL2/SDL.h"
+#include "SDL3/SDL.h"
 
 class LLKeyboardSDL : public LLKeyboard
 {
@@ -51,7 +51,7 @@ private:
     std::map<KEY, U32> mInvTranslateNumpadMap; // inverse of the above
 
 public:
-    static U32 mapSDL2toWin( U32 );
+    static U32 mapSDL3toWin( U32 );
 };
 
 #endif
