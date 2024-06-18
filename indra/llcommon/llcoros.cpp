@@ -3,25 +3,25 @@
  * @author Nat Goodspeed
  * @date   2009-06-03
  * @brief  Implementation for llcoros.
- *
+ * 
  * $LicenseInfo:firstyear=2009&license=viewerlgpl$
  * Second Life Viewer Source Code
  * Copyright (C) 2010, Linden Research, Inc.
- *
+ * 
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation;
  * version 2.1 of the License only.
- *
+ * 
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
- *
+ * 
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
- *
+ * 
  * Linden Research, Inc., 945 Battery Street, San Francisco, CA  94111  USA
  * $/LicenseInfo$
  */
@@ -123,7 +123,7 @@ LLCoros::LLCoros():
     // Previously we used
     // boost::context::guarded_stack_allocator::default_stacksize();
     // empirically this is insufficient.
-    mStackSize(1024*1024),
+    mStackSize(512*1024),
     // mCurrent does NOT own the current CoroData instance -- it simply
     // points to it. So initialize it with a no-op deleter.
     mCurrent{ [](CoroData*){} }
@@ -155,7 +155,7 @@ void LLCoros::cleanupSingleton()
         // don't use llcoro::suspend() because that module depends
         // on this one
         // This will yield current(main) thread and will let active
-        // corutines run once
+        // coroutines run once
         boost::this_fiber::yield();
     }
     printActiveCoroutines("after pumping");
@@ -286,55 +286,6 @@ std::string LLCoros::launch(const std::string& prefix, const callable_t& callabl
     return name;
 }
 
-namespace
-{
-
-#if LL_WINDOWS
-
-static const U32 STATUS_MSC_EXCEPTION = 0xE06D7363; // compiler specific
-
-U32 exception_filter(U32 code, struct _EXCEPTION_POINTERS *exception_infop)
-{
-    if (code == STATUS_MSC_EXCEPTION)
-    {
-        // C++ exception, go on
-        return EXCEPTION_CONTINUE_SEARCH;
-    }
-    else
-    {
-        // handle it
-        return EXCEPTION_EXECUTE_HANDLER;
-    }
-}
-
-void sehandle(const LLCoros::callable_t& callable)
-{
-    __try
-    {
-        callable();
-    }
-    __except (exception_filter(GetExceptionCode(), GetExceptionInformation()))
-    {
-        // convert to C++ styled exception
-        // Note: it might be better to use _se_set_translator
-        // if you want exception to inherit full callstack
-        char integer_string[512];
-        sprintf(integer_string, "SEH, code: %lu\n", GetExceptionCode());
-        throw std::exception(integer_string);
-    }
-}
-
-#else  // ! LL_WINDOWS
-
-inline void sehandle(const LLCoros::callable_t& callable)
-{
-    callable();
-}
-
-#endif // ! LL_WINDOWS
-
-} // anonymous namespace
-
 // Top-level wrapper around caller's coroutine callable.
 // Normally we like to pass strings and such by const reference -- but in this
 // case, we WANT to copy both the name and the callable to our local stack!
@@ -348,7 +299,7 @@ void LLCoros::toplevel(std::string name, callable_t callable)
     // run the code the caller actually wants in the coroutine
     try
     {
-        sehandle(callable);
+        LL::seh::catcher(callable);
     }
     catch (const Stop& exc)
     {
