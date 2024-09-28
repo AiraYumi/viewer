@@ -53,6 +53,7 @@
 #include "llvolumemgr.h"
 #include "llviewershadermgr.h"
 #include "llcontrolavatar.h"
+#include "llskinningutil.h"
 
 extern bool gShiftFrame;
 
@@ -860,6 +861,265 @@ void LLSpatialGroup::rebound()
         }
     }
 }
+
+
+void LLSpatialGroup::updateTransformUBOs()
+{
+    if (mOctreeNode == nullptr)
+    {
+        return;
+    }
+
+    // build transform UBO and transform intance map UBO
+    // Each LLVolumeFace contains an LLVertexBuffer of that face's geometry
+    // It's common for there to be many instances of an LLFace with the same material witin a given spatial group
+    // Each LLSpatialGroup will provide two UBOs to the shader:
+    //  mTransformUBO: a UBO containing a transform from LLVolume space to agent space for each drawable in the group
+    //  mInstanceMapUBO: a UBO mapping gl_InstanceID to the index of the transform in mTransformUBO
+
+    LL_PROFILE_ZONE_SCOPED;
+    static std::vector<const LLMatrix4*> transforms;
+    transforms.resize(0);
+
+    U32 max_transforms = LLSkinningUtil::getMaxGLTFJointCount();
+
+    mGLTFBatches.clear();
+
+    static std::vector<LLFace*> faces;
+    faces.clear();
+
+    {
+        LL_PROFILE_ZONE_NAMED("utubo - collect transforms");
+        for (OctreeNode::const_element_iter i = getDataBegin(); i != getDataEnd(); ++i)
+        {
+            LLDrawable* drawable = (LLDrawable*)(*i)->getDrawable();
+            llassert(drawable); // octree nodes are not allowed to contain null drawables
+
+            if (drawable->isState(LLDrawable::HAS_GLTF))
+            {
+                // TODO: split transform UBOs when we blow past the UBO size limit
+                llassert(transforms.size() < max_transforms);
+                U32 transform_index = (U32)transforms.size();
+                transforms.push_back(&drawable->getGLTFRenderMatrix());
+
+                LLVolume* volume = drawable->getVOVolume()->getVolume();
+                volume->createVertexBuffer();
+
+                for (S32 i = 0; i < drawable->getNumFaces(); ++i)
+                {
+                    LLFace* facep = drawable->getFace(i);
+
+                    LLVolumeFace& vf = volume->getVolumeFace(i);
+
+                    LLGLTFMaterial* gltf_mat = facep->getTextureEntry()->getGLTFRenderMaterial();
+                    if (gltf_mat && vf.mVertexBuffer.notNull())
+                    {
+                        if (facep->isState(LLFace::RIGGED) && facep->getSkinHash() != 0)
+                        {
+                            transforms[transforms.size() - 1] = &facep->mSkinInfo->mBindShapeMatrix.mMatrix4;
+                        }
+                        gltf_mat->updateBatchHash();
+                        faces.push_back(facep);
+                        facep->mTransformIndex = transform_index;
+                    }
+                }
+            }
+        }
+    }
+
+    struct InstanceMapEntry
+    {
+        U32 transform_index;
+        U32 padding[3];
+    };
+
+    U32 transform_ubo_size = (U32)(transforms.size() * 12 * sizeof(F32));
+    U32 instance_map_ubo_size = (U32)(faces.size() * sizeof(InstanceMapEntry));
+
+    bool new_transform_ubo = transform_ubo_size > mTransformUBOSize || transform_ubo_size < mTransformUBOSize / 2;
+    bool new_instance_map_ubo = instance_map_ubo_size > mInstanceMapUBOSize || instance_map_ubo_size < mInstanceMapUBOSize / 2;
+
+    if (new_transform_ubo)
+    {
+        if (mTransformUBO)
+        {
+            ll_gl_delete_buffers(1, &mTransformUBO);
+        }
+
+        mTransformUBO = ll_gl_gen_buffer();
+    }
+
+    if (new_instance_map_ubo)
+    {
+        if (mInstanceMapUBO)
+        {
+            ll_gl_delete_buffers(1, &mInstanceMapUBO);
+        }
+
+        mInstanceMapUBO = ll_gl_gen_buffer();
+    }
+
+    if (mTransformUBO != 0 && mInstanceMapUBO != 0 && transform_ubo_size > 0 && instance_map_ubo_size > 0)
+    {
+        struct InstanceSort
+        {
+            bool operator()(const LLFace* const& lhs, const LLFace* const& rhs)
+            { // order such that faces with the same vertex buffer, index offset, and material are adjacent
+
+                LLVolumeFace& lhs_vf = lhs->getDrawable()->getVOVolume()->getVolume()->getVolumeFace(lhs->getTEOffset());
+                LLVolumeFace& rhs_vf = rhs->getDrawable()->getVOVolume()->getVolume()->getVolumeFace(rhs->getTEOffset());
+
+                LLGLTFMaterial* lhs_mat = lhs->getTextureEntry()->getGLTFRenderMaterial();
+                LLGLTFMaterial* rhs_mat = rhs->getTextureEntry()->getGLTFRenderMaterial();
+
+                size_t rhs_hash = lhs_mat->getBatchHash();
+                size_t lhs_hash = rhs_mat->getBatchHash();
+
+                if (lhs_hash != rhs_hash)
+                {
+                    if (lhs_mat->mAlphaMode != rhs_mat->mAlphaMode)
+                    {  //ensure that materials of a given alpha mode are adjacent in the list
+                        return lhs_mat->mAlphaMode < rhs_mat->mAlphaMode;
+                    }
+                    else
+                    {
+                        return lhs_hash < rhs_hash;
+                    }
+                }
+                else if (lhs_vf.mVertexBuffer != rhs_vf.mVertexBuffer)
+                {
+                    return lhs_vf.mVertexBuffer < rhs_vf.mVertexBuffer;
+                }
+                else
+                {
+                    return lhs_vf.mVBIndexOffset < rhs_vf.mVBIndexOffset;
+                }
+            }
+        };
+
+        static std::vector<InstanceMapEntry> instance_map;
+        instance_map.resize(faces.size());
+        LLVOAvatar* avatar = nullptr;
+        U64 skin_hash = 0;
+
+        {
+            LL_PROFILE_ZONE_NAMED("utubo - build instances");
+            std::sort(faces.begin(), faces.end(), InstanceSort());
+
+            LLGLTFDrawInfo* current_info = nullptr;
+
+            for (U32 i = 0; i < faces.size(); ++i)
+            {
+                LLFace* facep = faces[i];
+                LLGLTFMaterial* gltf_mat = facep->getTextureEntry()->getGLTFRenderMaterial();
+                LLVolumeFace& vf = facep->getDrawable()->getVOVolume()->getVolume()->getVolumeFace(facep->getTEOffset());
+                U64 current_skin_hash = facep->getSkinHash();
+                LLVOAvatar* current_avatar = current_skin_hash ? facep->getDrawable()->getVObj()->getAvatar() : nullptr;
+
+                instance_map[i].transform_index = facep->mTransformIndex;
+
+                if (current_info &&
+                    vf.mVertexBuffer.notNull() &&
+                    current_info->mMaterialID == gltf_mat->getBatchHash() &&
+                    current_info->mVertexBuffer == vf.mVertexBuffer &&
+                    current_info->mElementOffset == vf.mVBIndexOffset &&
+                    current_avatar == avatar &&
+                    current_skin_hash == skin_hash)
+                { // another instance of the same LLVolumeFace and material
+                    current_info->mInstanceCount++;
+                }
+                else
+                {
+                    // a new instance
+                    llassert(gltf_mat->mAlphaMode >= 0 && gltf_mat->mAlphaMode <= 2);
+
+                    if (current_skin_hash)
+                    {
+                        auto* info = mGLTFBatches.createSkinned(gltf_mat->mAlphaMode, gltf_mat->mDoubleSided);
+                        current_info = info;
+
+                        info->mAvatar = current_avatar;
+                        info->mSkinInfo = facep->mSkinInfo;
+                    }
+                    else
+                    {
+                        current_info = mGLTFBatches.create(gltf_mat->mAlphaMode, gltf_mat->mDoubleSided);
+                    }
+
+                    avatar = current_avatar;
+                    skin_hash = current_skin_hash;
+
+                    current_info->mMaterialID = gltf_mat->getBatchHash();
+                    current_info->mMaterial = (LLFetchedGLTFMaterial*)gltf_mat;
+                    current_info->mVertexBuffer = vf.mVertexBuffer;
+                    current_info->mElementOffset = vf.mVBIndexOffset;
+                    current_info->mElementCount = vf.mNumIndices;
+                    current_info->mTransformUBO = mTransformUBO;
+                    current_info->mInstanceMapUBO = mInstanceMapUBO;
+                    current_info->mBaseInstance = i;
+                    current_info->mInstanceCount = 1;
+                }
+            }
+        }
+
+        {
+            LL_PROFILE_ZONE_NAMED("utubo - update UBO data");
+
+            static std::vector<F32> glmp;
+
+            glmp.resize(transforms.size() * 12);
+
+            F32* mp = glmp.data();
+
+            for (U32 i = 0; i < transforms.size(); ++i)
+            {
+                const F32* m = &transforms[i]->mMatrix[0][0];
+
+                U32 idx = i * 12;
+
+                mp[idx + 0] = m[0];
+                mp[idx + 1] = m[1];
+                mp[idx + 2] = m[2];
+                mp[idx + 3] = m[12];
+
+                mp[idx + 4] = m[4];
+                mp[idx + 5] = m[5];
+                mp[idx + 6] = m[6];
+                mp[idx + 7] = m[13];
+
+                mp[idx + 8] = m[8];
+                mp[idx + 9] = m[9];
+                mp[idx + 10] = m[10];
+                mp[idx + 11] = m[14];
+            }
+
+
+            glBindBuffer(GL_UNIFORM_BUFFER, mTransformUBO);
+            if (new_transform_ubo)
+            {
+                mTransformUBOSize = transform_ubo_size;
+                glBufferData(GL_UNIFORM_BUFFER, glmp.size() * sizeof(F32), glmp.data(), GL_STREAM_DRAW);
+            }
+            else
+            {
+                glBufferSubData(GL_UNIFORM_BUFFER, 0, glmp.size() * sizeof(F32), glmp.data());
+            }
+
+            glBindBuffer(GL_UNIFORM_BUFFER, mInstanceMapUBO);
+            if (new_instance_map_ubo)
+            {
+                mInstanceMapUBOSize = instance_map_ubo_size;
+                glBufferData(GL_UNIFORM_BUFFER, instance_map.size() * sizeof(InstanceMapEntry), instance_map.data(), GL_STREAM_DRAW);
+            }
+            else
+            {
+                glBufferSubData(GL_UNIFORM_BUFFER, 0, instance_map.size() * sizeof(InstanceMapEntry), instance_map.data());
+            }
+            glBindBuffer(GL_UNIFORM_BUFFER, 0);
+        }
+    }
+}
+
 
 void LLSpatialGroup::destroyGLState(bool keep_occlusion)
 {
@@ -3868,10 +4128,9 @@ LLColor4U LLDrawInfo::getDebugColor() const
 {
     LLColor4U color;
 
-    LLCRC hash;
-    hash.update((U8*)this + sizeof(S32), sizeof(LLDrawInfo) - sizeof(S32));
-
-    *((U32*) color.mV) = hash.getCRC();
+    // take last 4 bytes of pointer as color
+    U64 ptr = (U64)this;
+    *((U32*)color.mV) = (U32)ptr;
 
     color.mV[3] = 200;
 
@@ -3886,6 +4145,47 @@ void LLDrawInfo::validate()
 U64 LLDrawInfo::getSkinHash()
 {
     return mSkinInfo ? mSkinInfo->mHash : 0;
+}
+
+void LLGLTFBatches::clear()
+{
+    for (auto& list : mDrawInfo)
+    {
+        for (auto& sublist : list)
+        {
+            sublist.clear();
+        }
+    }
+
+    for (auto& list : mSkinnedDrawInfo)
+    {
+        for (auto& sublist : list)
+        {
+            sublist.clear();
+        }
+    }
+}
+
+LLGLTFDrawInfo* LLGLTFBatches::create(LLGLTFMaterial::AlphaMode alpha_mode, bool double_sided)
+{
+    return &mDrawInfo[alpha_mode][double_sided].emplace_back();
+}
+
+LLSkinnedGLTFDrawInfo* LLGLTFBatches::createSkinned(LLGLTFMaterial::AlphaMode alpha_mode, bool double_sided)
+{
+    return &mSkinnedDrawInfo[alpha_mode][double_sided].emplace_back();
+}
+
+void LLGLTFBatches::add(const LLGLTFBatches& other)
+{
+    for (U32 i = 0; i < 3; i++)
+    {
+        for (U32 j = 0; j < 2; j++)
+        {
+            mDrawInfo[i][j].insert(mDrawInfo[i][j].end(), other.mDrawInfo[i][j].begin(), other.mDrawInfo[i][j].end());
+            mSkinnedDrawInfo[i][j].insert(mSkinnedDrawInfo[i][j].end(), other.mSkinnedDrawInfo[i][j].begin(), other.mSkinnedDrawInfo[i][j].end());
+        }
+    }
 }
 
 LLCullResult::LLCullResult()
@@ -3962,6 +4262,7 @@ void LLCullResult::clear()
     mVisibleBridgeSize = 0;
     mVisibleBridgeEnd = &mVisibleBridge[0];
 
+    mGLTFBatches.clear();
 
     for (U32 i = 0; i < LLRenderPass::NUM_RENDER_TYPES; i++)
     {

@@ -63,6 +63,7 @@ LLFetchedGLTFMaterial& LLFetchedGLTFMaterial::operator=(const LLFetchedGLTFMater
 
 void LLFetchedGLTFMaterial::bind(LLViewerTexture* media_tex)
 {
+    LL_PROFILE_ZONE_SCOPED;
     // glTF 2.0 Specification 3.9.4. Alpha Coverage
     // mAlphaCutoff is only valid for LLGLTFMaterial::ALPHA_MODE_MASK
     F32 min_alpha = -1.0;
@@ -73,7 +74,7 @@ void LLFetchedGLTFMaterial::bind(LLViewerTexture* media_tex)
     LLViewerTexture* baseColorTex = media_tex ? media_tex : mBaseColorTexture;
     LLViewerTexture* emissiveTex = media_tex ? media_tex : mEmissiveTexture;
 
-    if (!LLPipeline::sShadowRender || (mAlphaMode == LLGLTFMaterial::ALPHA_MODE_MASK))
+    if (mAlphaMode == LLGLTFMaterial::ALPHA_MODE_MASK)
     {
         if (mAlphaMode == LLGLTFMaterial::ALPHA_MODE_MASK)
         {
@@ -94,6 +95,7 @@ void LLFetchedGLTFMaterial::bind(LLViewerTexture* media_tex)
     F32 base_color_packed[8];
     mTextureTransform[GLTF_TEXTURE_INFO_BASE_COLOR].getPacked(base_color_packed);
     shader->uniform4fv(LLShaderMgr::TEXTURE_BASE_COLOR_TRANSFORM, 2, (F32*)base_color_packed);
+    shader->uniform4fv(LLShaderMgr::BASE_COLOR_FACTOR, 1, mBaseColor.mV);
 
     if (!LLPipeline::sShadowRender)
     {
@@ -123,8 +125,6 @@ void LLFetchedGLTFMaterial::bind(LLViewerTexture* media_tex)
         {
             shader->bindTexture(LLShaderMgr::EMISSIVE_MAP, LLViewerFetchedTexture::sWhiteImagep);
         }
-
-        // NOTE: base color factor is baked into vertex stream
 
         shader->uniform1f(LLShaderMgr::ROUGHNESS_FACTOR, mRoughnessFactor);
         shader->uniform1f(LLShaderMgr::METALLIC_FACTOR, mMetallicFactor);
