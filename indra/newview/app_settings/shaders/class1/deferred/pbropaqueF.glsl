@@ -26,60 +26,124 @@
 /*[EXTRA_CODE_HERE]*/
 
 
-#ifndef IS_HUD
-
 // deferred opaque implementation
 
+#ifdef SAMPLE_BASE_COLOR_MAP
 uniform sampler2D diffuseMap;  //always in sRGB space
+vec4 baseColorFactor;
+in vec2 base_color_texcoord;
+float minimum_alpha; // PBR alphaMode: MASK, See: mAlphaCutoff, setAlphaCutoff()
+#endif
 
-uniform float metallicFactor;
-uniform float roughnessFactor;
-uniform vec3 emissiveColor;
-uniform sampler2D bumpMap;
-uniform sampler2D emissiveMap;
+#ifdef SAMPLE_ORM_MAP
+float metallicFactor;
+float roughnessFactor;
 uniform sampler2D specularMap; // Packed: Occlusion, Metal, Roughness
+in vec2 metallic_roughness_texcoord;
+#endif
 
-out vec4 frag_data[4];
-
-in vec3 vary_position;
-in vec4 vertex_color;
+#ifdef SAMPLE_NORMAL_MAP
+uniform sampler2D bumpMap;
 in vec3 vary_normal;
 in vec3 vary_tangent;
 flat in float vary_sign;
-
-in vec2 base_color_texcoord;
 in vec2 normal_texcoord;
-in vec2 metallic_roughness_texcoord;
-in vec2 emissive_texcoord;
+#endif
 
-uniform float minimum_alpha; // PBR alphaMode: MASK, See: mAlphaCutoff, setAlphaCutoff()
+#ifdef SAMPLE_EMISSIVE_MAP
+vec3 emissiveColor;
+uniform sampler2D emissiveMap;
+in vec2 emissive_texcoord;
+#endif
+
+#ifdef OUTPUT_BASE_COLOR_ONLY
+out vec4 frag_color;
+#else
+out vec4 frag_data[4];
+#endif
+
+#ifdef MIRROR_CLIP
+in vec3 vary_position;
+void mirrorClip(vec3 pos);
+#endif
 
 vec3 linear_to_srgb(vec3 c);
 vec3 srgb_to_linear(vec3 c);
 
-uniform vec4 clipPlane;
-uniform float clipSign;
+#ifdef SAMPLE_MATERIALS_UBO
+layout (std140) uniform GLTFMaterials
+{
+    // index by gltf_material_id*8
 
-void mirrorClip(vec3 pos);
+    // [gltf_material_id + [0-1]] -  base color transform
+    // [gltf_material_id + [2-3]] -  normal transform
+    // [gltf_material_id + [4-5]] -  metallic roughness transform
+    // [gltf_material_id + [6-7]] -  emissive transform
 
-uniform mat3 normal_matrix;
+    // Transforms are packed as follows
+    // packed[0] = vec4(scale.x, scale.y, rotation, offset.x)
+    // packed[1] = vec4(offset.y, *, *, *)
+
+    // packed[1].yzw varies:
+    //   base color transform -- base color factor
+    //   normal transform -- .y - alpha factor, .z - minimum alpha
+    //   metallic roughness transform -- .y - roughness factor, .z - metallic factor
+    //   emissive transform -- emissive factor
+
+
+    vec4 gltf_material_data[MAX_UBO_VEC4S];
+};
+
+flat in int gltf_material_id;
+
+void unpackMaterial()
+{
+    int idx = gltf_material_id*8;
+#ifdef SAMPLE_BASE_COLOR_MAP
+    baseColorFactor.rgb = gltf_material_data[idx+1].yzw;
+    baseColorFactor.a = gltf_material_data[idx+3].y;
+    minimum_alpha = gltf_material_data[idx+3].z;
+#endif
+
+#ifdef SAMPLE_ORM_MAP
+    roughnessFactor = gltf_material_data[idx+5].y;
+    metallicFactor = gltf_material_data[idx+5].z;
+#endif
+
+#ifdef SAMPLE_EMISSIVE_MAP
+    emissiveColor = gltf_material_data[idx+7].yzw;
+#endif
+}
+#else // SAMPLE_MATERIALS_UBO
+void unpackMaterial()
+{
+}
+#endif
 
 void main()
 {
+    unpackMaterial();
+#ifdef MIRROR_CLIP
     mirrorClip(vary_position);
+#endif
 
-    vec4 basecolor = texture(diffuseMap, base_color_texcoord.xy).rgba;
+    vec4 basecolor = vec4(1);
+#ifdef SAMPLE_BASE_COLOR_MAP
+    basecolor = texture(diffuseMap, base_color_texcoord.xy).rgba;
     basecolor.rgb = srgb_to_linear(basecolor.rgb);
 
-    basecolor *= vertex_color;
+    basecolor *= baseColorFactor;
 
+#ifdef ALPHA_MASK
     if (basecolor.a < minimum_alpha)
     {
         discard;
     }
+#endif
 
-    vec3 col = basecolor.rgb;
+#endif
 
+#ifdef SAMPLE_NORMAL_MAP
     // from mikktspace.com
     vec3 vNt = texture(bumpMap, normal_texcoord.xy).xyz*2.0-1.0;
     float sign = vary_sign;
@@ -89,6 +153,13 @@ void main()
     vec3 vB = sign * cross(vN, vT);
     vec3 tnorm = normalize( vNt.x * vT + vNt.y * vB + vNt.z * vN );
 
+#ifdef DOUBLE_SIDED
+    tnorm *= gl_FrontFacing ? 1.0 : -1.0;
+#endif
+
+#endif
+
+#ifdef SAMPLE_ORM_MAP
     // RGB = Occlusion, Roughness, Metal
     // default values, see LLViewerTexture::sDefaultPBRORMImagep
     //   occlusion 1.0
@@ -98,66 +169,27 @@ void main()
 
     spec.g *= roughnessFactor;
     spec.b *= metallicFactor;
-
-    vec3 emissive = emissiveColor;
-    emissive *= srgb_to_linear(texture(emissiveMap, emissive_texcoord.xy).rgb);
-
-    tnorm *= gl_FrontFacing ? 1.0 : -1.0;
-
-    //spec.rgb = vec3(1,1,0);
-    //col = vec3(0,0,0);
-    //emissive = vary_tangent.xyz*0.5+0.5;
-    //emissive = vec3(sign*0.5+0.5);
-    //emissive = vNt * 0.5 + 0.5;
-    //emissive = tnorm*0.5+0.5;
-    // See: C++: addDeferredAttachments(), GLSL: softenLightF
-    frag_data[0] = max(vec4(col, 0.0), vec4(0));                                                   // Diffuse
-    frag_data[1] = max(vec4(spec.rgb,0.0), vec4(0));                                    // PBR linear packed Occlusion, Roughness, Metal.
-    frag_data[2] = vec4(tnorm, GBUFFER_FLAG_HAS_PBR); // normal, environment intensity, flags
-    frag_data[3] = max(vec4(emissive,0), vec4(0));                                                // PBR sRGB Emissive
-}
-
-#else
-
-// forward fullbright implementation for HUDs
-
-uniform sampler2D diffuseMap;  //always in sRGB space
-
-uniform vec3 emissiveColor;
-uniform sampler2D emissiveMap;
-
-out vec4 frag_color;
-
-in vec3 vary_position;
-in vec4 vertex_color;
-
-in vec2 base_color_texcoord;
-in vec2 emissive_texcoord;
-
-uniform float minimum_alpha; // PBR alphaMode: MASK, See: mAlphaCutoff, setAlphaCutoff()
-
-vec3 linear_to_srgb(vec3 c);
-vec3 srgb_to_linear(vec3 c);
-
-void main()
-{
-    vec4 basecolor = texture(diffuseMap, base_color_texcoord.xy).rgba;
-    if (basecolor.a < minimum_alpha)
-    {
-        discard;
-    }
-
-    vec3 col = vertex_color.rgb * srgb_to_linear(basecolor.rgb);
-
-    vec3 emissive = emissiveColor;
-    emissive *= srgb_to_linear(texture(emissiveMap, emissive_texcoord.xy).rgb);
-
-    col += emissive;
-
-    // HUDs are rendered after gamma correction, output in sRGB space
-    frag_color.rgb = linear_to_srgb(col);
-    frag_color.a = 0.0;
-}
-
 #endif
+
+#ifdef SAMPLE_EMISSIVE_MAP
+    vec3 emissive = emissiveColor;
+    emissive *= srgb_to_linear(texture(emissiveMap, emissive_texcoord.xy).rgb);
+#endif
+
+#ifdef OUTPUT_BASE_COLOR_ONLY
+#ifdef SAMPLE_EMISSIVE_MAP
+    basecolor.rgb += emissive;
+#endif
+#ifdef OUTPUT_SRGB
+    basecolor.rgb = linear_to_srgb(basecolor.rgb);
+#endif
+    frag_color = basecolor;
+#else
+    // See: C++: addDeferredAttachments(), GLSL: softenLightF
+    frag_data[0] = max(vec4(basecolor.rgb, 0.0), vec4(0));
+    frag_data[1] = max(vec4(spec.rgb,0.0), vec4(0));
+    frag_data[2] = vec4(tnorm, GBUFFER_FLAG_HAS_PBR);
+    frag_data[3] = max(vec4(emissive,0), vec4(0));
+#endif
+}
 

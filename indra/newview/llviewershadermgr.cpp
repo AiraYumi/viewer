@@ -168,7 +168,6 @@ LLGLSLShader            gDeferredSkinnedShadowProgram;
 LLGLSLShader            gDeferredShadowCubeProgram;
 LLGLSLShader            gDeferredShadowAlphaMaskProgram;
 LLGLSLShader            gDeferredSkinnedShadowAlphaMaskProgram;
-LLGLSLShader            gDeferredShadowGLTFAlphaMaskProgram;
 LLGLSLShader            gDeferredSkinnedShadowGLTFAlphaMaskProgram;
 LLGLSLShader            gDeferredShadowGLTFAlphaBlendProgram;
 LLGLSLShader            gDeferredSkinnedShadowGLTFAlphaBlendProgram;
@@ -224,16 +223,17 @@ LLGLSLShader            gNormalMapGenProgram;
 LLGLSLShader            gDeferredGenBrdfLutProgram;
 LLGLSLShader            gDeferredBufferVisualProgram;
 
+
+
 // Deferred materials shaders
 LLGLSLShader            gDeferredMaterialProgram[LLMaterial::SHADER_COUNT*2];
 LLGLSLShader            gHUDPBROpaqueProgram;
+LLGLSLShader            gHUDPBRAlphaProgram;
 LLGLSLShader            gPBRGlowProgram;
 LLGLSLShader            gPBRGlowSkinnedProgram;
-LLGLSLShader            gDeferredPBROpaqueProgram;
-LLGLSLShader            gDeferredSkinnedPBROpaqueProgram;
-LLGLSLShader            gHUDPBRAlphaProgram;
-LLGLSLShader            gDeferredPBRAlphaProgram;
-LLGLSLShader            gDeferredSkinnedPBRAlphaProgram;
+
+LLGLTFShaderPack        gGLTFPBRShaderPack;
+
 LLGLSLShader            gDeferredPBRTerrainProgram[TERRAIN_PAINT_TYPE_COUNT];
 
 LLGLSLShader            gGLTFPBRMetallicRoughnessProgram;
@@ -430,7 +430,6 @@ void LLViewerShaderMgr::finalizeShaderList()
     mShaderList.push_back(&gDeferredWLCloudProgram);
     mShaderList.push_back(&gDeferredWLMoonProgram);
     mShaderList.push_back(&gDeferredWLSunProgram);
-    mShaderList.push_back(&gDeferredPBRAlphaProgram);
     mShaderList.push_back(&gHUDPBRAlphaProgram);
     mShaderList.push_back(&gDeferredPostTonemapProgram);
     mShaderList.push_back(&gNoPostTonemapProgram);
@@ -438,7 +437,6 @@ void LLViewerShaderMgr::finalizeShaderList()
     mShaderList.push_back(&gLegacyPostGammaCorrectProgram);
     mShaderList.push_back(&gDeferredDiffuseProgram);
     mShaderList.push_back(&gDeferredBumpProgram);
-    mShaderList.push_back(&gDeferredPBROpaqueProgram);
 
     if (gSavedSettings.getBOOL("GLTFEnabled"))
     {
@@ -456,6 +454,8 @@ void LLViewerShaderMgr::finalizeShaderList()
     mShaderList.push_back(&gDeferredDiffuseAlphaMaskProgram);
     mShaderList.push_back(&gDeferredNonIndexedDiffuseAlphaMaskProgram);
     mShaderList.push_back(&gDeferredTreeProgram);
+
+    gGLTFPBRShaderPack.registerWLShaders(mShaderList);
 
     // make sure there are no redundancies
     llassert(no_redundant_shaders(mShaderList));
@@ -1087,8 +1087,6 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredShadowCubeProgram.unload();
         gDeferredShadowAlphaMaskProgram.unload();
         gDeferredSkinnedShadowAlphaMaskProgram.unload();
-        gDeferredShadowGLTFAlphaMaskProgram.unload();
-        gDeferredSkinnedShadowGLTFAlphaMaskProgram.unload();
         gDeferredShadowFullbrightAlphaMaskProgram.unload();
         gDeferredSkinnedShadowFullbrightAlphaMaskProgram.unload();
         gDeferredAvatarShadowProgram.unload();
@@ -1152,11 +1150,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
         gHUDPBROpaqueProgram.unload();
         gPBRGlowProgram.unload();
-        gDeferredPBROpaqueProgram.unload();
+        gGLTFPBRShaderPack.unload();
         gGLTFPBRMetallicRoughnessProgram.unload();
-        gDeferredSkinnedPBROpaqueProgram.unload();
-        gDeferredPBRAlphaProgram.unload();
-        gDeferredSkinnedPBRAlphaProgram.unload();
         for (U32 paint_type = 0; paint_type < TERRAIN_PAINT_TYPE_COUNT; ++paint_type)
         {
             gDeferredPBRTerrainProgram[paint_type].unload();
@@ -1328,23 +1323,135 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     gDeferredMaterialProgram[9+LLMaterial::SHADER_COUNT].mFeatures.hasLighting = true;
     gDeferredMaterialProgram[13+LLMaterial::SHADER_COUNT].mFeatures.hasLighting = true;
 
+    U32 node_size = 16 * 3;
+    U32 max_nodes = gGLManager.mMaxUniformBlockSize / node_size;
+
+    U32 instance_map_size = 4 * 4;
+    U32 max_instances = gGLManager.mMaxUniformBlockSize / instance_map_size;
+
+    U32 max_vec4s = gGLManager.mMaxUniformBlockSize / sizeof(LLVector4a);
     if (success)
     {
-        gDeferredPBROpaqueProgram.mName = "Deferred PBR Opaque Shader";
-        gDeferredPBROpaqueProgram.mFeatures.hasSrgb = true;
+        std::string alpha_mode_names[3] = { "Opaque", "Alpha Blend", "Alpha Mask" };
+        std::string double_sided_names[2] = { "Single Sided", "Double Sided" };
+        std::string planar_names[2] = { "Non-Planar", "Planar" };
 
-        gDeferredPBROpaqueProgram.mShaderFiles.clear();
-        gDeferredPBROpaqueProgram.mShaderFiles.push_back(make_pair("deferred/pbropaqueV.glsl", GL_VERTEX_SHADER));
-        gDeferredPBROpaqueProgram.mShaderFiles.push_back(make_pair("deferred/pbropaqueF.glsl", GL_FRAGMENT_SHADER));
-        gDeferredPBROpaqueProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
-        gDeferredPBROpaqueProgram.clearPermutations();
-
-        success = make_rigged_variant(gDeferredPBROpaqueProgram, gDeferredSkinnedPBROpaqueProgram);
-        if (success)
+        for (U32 i = 0; i < 3; ++i)
         {
-            success = gDeferredPBROpaqueProgram.createShader();
+            LLGLTFMaterial::AlphaMode alpha_mode = (LLGLTFMaterial::AlphaMode)i;
+
+            for (U32 j = 0; j < 2; ++j)
+            {
+                bool double_sided = j == 1;
+
+                for (U32 k = 0; k < 2; ++k)
+                {
+                    bool planar_projection = k == 1;
+
+                    if (success)
+                    { // main view shader
+                        std::string name = llformat("GLTF PBR %s %s %s Shader", alpha_mode_names[i].c_str(), double_sided_names[j].c_str(), planar_names[k].c_str());
+
+                        LLGLSLShader& shader = gGLTFPBRShaderPack.mShader[i][j][k];
+                        LLGLSLShader& skinned_shader = gGLTFPBRShaderPack.mSkinnedShader[i][j][k];
+
+                        shader.mName = name;
+                        shader.mFeatures.hasSrgb = true;
+
+                        shader.mShaderFiles.clear();
+
+                        shader.mShaderFiles.push_back(make_pair("deferred/pbropaqueV.glsl", GL_VERTEX_SHADER));
+                        shader.mShaderFiles.push_back(make_pair("deferred/pbropaqueF.glsl", GL_FRAGMENT_SHADER));
+                        shader.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+                        shader.clearPermutations();
+
+                        shader.addPermutation("MAX_NODES_PER_GLTF_OBJECT", std::to_string(max_nodes));
+                        shader.addPermutation("MAX_INSTANCES_PER_GLTF_OBJECT", std::to_string(max_instances));
+                        shader.addPermutation("MAX_UBO_VEC4S", std::to_string(max_vec4s));
+
+                        shader.addPermutation("SAMPLE_BASE_COLOR_MAP", "1");
+                        shader.addPermutation("SAMPLE_ORM_MAP", "1");
+                        shader.addPermutation("SAMPLE_NORMAL_MAP", "1");
+                        shader.addPermutation("SAMPLE_EMISSIVE_MAP", "1");
+                        shader.addPermutation("SAMPLE_MATERIALS_UBO", "1");
+
+                        if (alpha_mode == LLGLTFMaterial::ALPHA_MODE_MASK)
+                        {
+                            shader.addPermutation("ALPHA_MASK", "1");
+                        }
+
+                        if (double_sided)
+                        {
+                            shader.addPermutation("DOUBLE_SIDED", "1");
+                        }
+
+                        if (planar_projection)
+                        {
+                            shader.addPermutation("PLANAR_PROJECTION", "1");
+                        }
+
+                        if (gSavedSettings.getBOOL("RenderMirrors"))
+                        {
+                            shader.addPermutation("MIRROR_CLIP", "1");
+                        }
+
+                        success = make_rigged_variant(shader, skinned_shader);
+                        if (success)
+                        {
+                            success = shader.createShader();
+                        }
+                        llassert(success);
+
+                    }
+
+                    if (success)
+                    { // shadow shader
+                        std::string name = llformat("GLTF PBR %s %s Shadow Shader", alpha_mode_names[i].c_str(), double_sided_names[j].c_str());
+
+                        LLGLSLShader& shader = gGLTFPBRShaderPack.mShadowShader[i][j][k];
+                        LLGLSLShader& skinned_shader = gGLTFPBRShaderPack.mSkinnedShadowShader[i][j][k];
+
+                        shader.mName = name;
+
+                        shader.mShaderFiles.clear();
+
+                        shader.mShaderFiles.push_back(make_pair("deferred/pbropaqueV.glsl", GL_VERTEX_SHADER));
+                        shader.mShaderFiles.push_back(make_pair("deferred/pbropaqueF.glsl", GL_FRAGMENT_SHADER));
+                        shader.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+                        shader.clearPermutations();
+
+                        shader.addPermutation("MAX_NODES_PER_GLTF_OBJECT", std::to_string(max_nodes));
+                        shader.addPermutation("MAX_INSTANCES_PER_GLTF_OBJECT", std::to_string(max_instances));
+                        shader.addPermutation("MAX_UBO_VEC4S", std::to_string(max_vec4s));
+
+                        shader.addPermutation("OUTPUT_BASE_COLOR_ONLY", "1");
+
+                        if (alpha_mode != LLGLTFMaterial::ALPHA_MODE_OPAQUE)
+                        {
+                            shader.addPermutation("ALPHA_MASK", "1");
+                            shader.addPermutation("SAMPLE_MATERIALS_UBO", "1");
+
+                            if (planar_projection)
+                            {
+                                shader.addPermutation("PLANAR_PROJECTION", "1");
+                            }
+                        }
+
+                        if (double_sided)
+                        {
+                            shader.addPermutation("DOUBLE_SIDED", "1");
+                        }
+
+                        success = make_rigged_variant(shader, skinned_shader);
+                        if (success)
+                        {
+                            success = shader.createShader();
+                        }
+                        llassert(success);
+                    }
+                }
+            }
         }
-        llassert(success);
     }
 
     if (gSavedSettings.getBOOL("GLTFEnabled"))
@@ -1399,7 +1506,14 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gHUDPBROpaqueProgram.mShaderFiles.push_back(make_pair("deferred/pbropaqueF.glsl", GL_FRAGMENT_SHADER));
         gHUDPBROpaqueProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         gHUDPBROpaqueProgram.clearPermutations();
-        gHUDPBROpaqueProgram.addPermutation("IS_HUD", "1");
+
+        gHUDPBROpaqueProgram.addPermutation("MAX_NODES_PER_GLTF_OBJECT", std::to_string(max_nodes));
+        gHUDPBROpaqueProgram.addPermutation("MAX_INSTANCES_PER_GLTF_OBJECT", std::to_string(max_instances));
+        gHUDPBROpaqueProgram.addPermutation("MAX_UBO_VEC4S", std::to_string(max_vec4s));
+        gHUDPBROpaqueProgram.addPermutation("OUTPUT_BASE_COLOR_ONLY", "1");
+        gHUDPBROpaqueProgram.addPermutation("SAMPLE_BASE_COLOR_MAP", "1");
+        gHUDPBROpaqueProgram.addPermutation("SAMPLE_EMISSIVE_MAP", "1");
+        gHUDPBROpaqueProgram.addPermutation("OUTPUT_SRGB", "1");
 
         success = gHUDPBROpaqueProgram.createShader();
 
@@ -1407,7 +1521,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     }
 
 
-
+#if 0 //TODO: move to gGLTFPBRShaderPack
     if (success)
     {
         LLGLSLShader* shader = &gDeferredPBRAlphaProgram;
@@ -1458,7 +1572,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         shader->mRiggedVariant->mFeatures.calculatesLighting = true;
         shader->mRiggedVariant->mFeatures.hasLighting = true;
     }
-
+#endif
     if (success)
     {
         LLGLSLShader* shader = &gHUDPBRAlphaProgram;
@@ -1467,12 +1581,18 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         shader->mFeatures.hasSrgb = true;
 
         shader->mShaderFiles.clear();
-        shader->mShaderFiles.push_back(make_pair("deferred/pbralphaV.glsl", GL_VERTEX_SHADER));
-        shader->mShaderFiles.push_back(make_pair("deferred/pbralphaF.glsl", GL_FRAGMENT_SHADER));
+        shader->mShaderFiles.push_back(make_pair("deferred/pbropaqueV.glsl", GL_VERTEX_SHADER));
+        shader->mShaderFiles.push_back(make_pair("deferred/pbropaqueF.glsl", GL_FRAGMENT_SHADER));
 
         shader->clearPermutations();
+        shader->addPermutation("MAX_NODES_PER_GLTF_OBJECT", std::to_string(max_nodes));
+        shader->addPermutation("MAX_INSTANCES_PER_GLTF_OBJECT", std::to_string(max_instances));
+        shader->addPermutation("MAX_UBO_VEC4S", std::to_string(max_vec4s));
 
-        shader->addPermutation("IS_HUD", "1");
+        shader->addPermutation("OUTPUT_BASE_COLOR_ONLY", "1");
+        shader->addPermutation("SAMPLE_BASE_COLOR_MAP", "1");
+        shader->addPermutation("SAMPLE_EMISSIVE_MAP", "1");
+        shader->addPermutation("OUTPUT_SRGB", "1");
 
         shader->mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         success = shader->createShader();
@@ -2152,20 +2272,6 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredShadowAlphaMaskProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         success = make_rigged_variant(gDeferredShadowAlphaMaskProgram, gDeferredSkinnedShadowAlphaMaskProgram);
         success = success && gDeferredShadowAlphaMaskProgram.createShader();
-        llassert(success);
-    }
-
-
-    if (success)
-    {
-        gDeferredShadowGLTFAlphaMaskProgram.mName = "Deferred GLTF Shadow Alpha Mask Shader";
-        gDeferredShadowGLTFAlphaMaskProgram.mShaderFiles.clear();
-        gDeferredShadowGLTFAlphaMaskProgram.mShaderFiles.push_back(make_pair("deferred/pbrShadowAlphaMaskV.glsl", GL_VERTEX_SHADER));
-        gDeferredShadowGLTFAlphaMaskProgram.mShaderFiles.push_back(make_pair("deferred/pbrShadowAlphaMaskF.glsl", GL_FRAGMENT_SHADER));
-        gDeferredShadowGLTFAlphaMaskProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
-        gDeferredShadowGLTFAlphaMaskProgram.clearPermutations();
-        success = make_rigged_variant(gDeferredShadowGLTFAlphaMaskProgram, gDeferredSkinnedShadowGLTFAlphaMaskProgram);
-        success = success && gDeferredShadowGLTFAlphaMaskProgram.createShader();
         llassert(success);
     }
 
@@ -3278,5 +3384,31 @@ LLViewerShaderMgr::shader_iter LLViewerShaderMgr::beginShaders() const
 LLViewerShaderMgr::shader_iter LLViewerShaderMgr::endShaders() const
 {
     return mShaderList.end();
+}
+
+inline void LLGLTFShaderPack::unload()
+{
+    for (U32 i = 0; i < 3; i++)
+    {
+        for (U32 j = 0; j < 2; j++)
+        {
+            for (U32 k = 0; k < 2; ++k)
+            {
+                mShader[i][j][k].unload();
+                mSkinnedShader[i][j][k].unload();
+                mShadowShader[i][j][k].unload();
+                mSkinnedShadowShader[i][j][k].unload();
+            }
+        }
+    }
+}
+
+void LLGLTFShaderPack::registerWLShaders(std::vector<LLGLSLShader*>& shader_list)
+{
+    for (U32 planar = 0; planar < 2; ++planar)
+    {
+        shader_list.push_back(&mShader[LLGLTFMaterial::ALPHA_MODE_BLEND][0][planar]);
+        shader_list.push_back(&mShader[LLGLTFMaterial::ALPHA_MODE_BLEND][1][planar]);
+    }
 }
 

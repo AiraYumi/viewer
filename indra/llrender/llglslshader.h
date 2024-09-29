@@ -148,10 +148,12 @@ public:
 
     enum UniformBlock : GLuint
     {
-        UB_REFLECTION_PROBES,   // "ReflectionProbes"
-        UB_GLTF_JOINTS,         // "GLTFJoints"
-        UB_GLTF_NODES,          // "GLTFNodes"
-        UB_GLTF_MATERIALS,      // "GLTFMaterials"
+        UB_REFLECTION_PROBES,       // "ReflectionProbes"
+        UB_GLTF_JOINTS,             // "GLTFJoints"
+        UB_GLTF_NODES,              // "GLTFNodes"
+        UB_GLTF_NODE_INSTANCE_MAP,  // "GLTFNodeInstanceMap"
+        UB_GLTF_MATERIALS,          // "GLTFMaterials"
+        UB_PRIM_SCALES,             // "PrimScales"
         NUM_UNIFORM_BLOCKS
     };
 
@@ -351,6 +353,8 @@ public:
     constexpr static U8 NUM_GLTF_VARIANTS = 16;
 
     std::vector<LLGLSLShader> mGLTFVariants;
+
+
 
     //helper to bind GLTF variant
     void bind(U8 variant);
