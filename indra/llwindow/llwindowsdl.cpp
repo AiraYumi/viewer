@@ -188,6 +188,8 @@ LLWindowSDL::LLWindowSDL(LLWindowCallbacks* callbacks,
     gKeyboard = new LLKeyboardSDL();
     gKeyboard->setCallbacks(callbacks);
 
+    mReallyCapturedCount = 0;
+
     // Assume 4:3 aspect ratio until we know better
     mOriginalAspectRatio = 1024.0 / 768.0;
 
@@ -229,11 +231,6 @@ static SDL_Surface *Load_BMP_Resource(const char *basename)
     path_buffer[PATH_BUFFER_SIZE-1] = '\0';
 
     return SDL_LoadBMP(path_buffer);
-}
-
-static U32 detectVRAM() // Return the available amount of VRAM in MB
-{
-   return 0;
 }
 
 void LLWindowSDL::setTitle(const std::string title)
@@ -300,6 +297,7 @@ bool LLWindowSDL::createContext(int x, int y, int width, int height, int bits, b
 
     // captures don't survive contexts
     mGrabbyKeyFlags = 0;
+    mReallyCapturedCount = 0;
 
     std::initializer_list<std::tuple< char const*, char const * > > hintList =
             {
@@ -520,10 +518,10 @@ bool LLWindowSDL::createContext(int x, int y, int width, int height, int bits, b
         {
             mX11Data.mDisplay = info.info.x11.display;
             mX11Data.mXWindowID = info.info.x11.window;
-	        mServerProtocol = X11;
-	        LL_INFOS() << "Running under X11" << LL_ENDL;
+            mServerProtocol = X11;
+            LL_INFOS() << "Running under X11" << LL_ENDL;
         }
-	    else if ( info.subsystem == SDL_SYSWM_WAYLAND )
+        else if ( info.subsystem == SDL_SYSWM_WAYLAND )
         {
             mWaylandData.mSurface = info.info.wl.surface;
             mServerProtocol = Wayland;
@@ -533,7 +531,7 @@ bool LLWindowSDL::createContext(int x, int y, int width, int height, int bits, b
             if( getenv("DISPLAY") )
                 unsetenv("DISPLAY");
 
-	        LL_INFOS() << "Running under Wayland" << LL_ENDL;
+            LL_INFOS() << "Running under Wayland" << LL_ENDL;
             LL_WARNS() << "Be aware that with at least SDL2 the window will not receive minimizing events, thus minimized state can only be estimated."
                           "also setting the application icon via SDL_SetWindowIcon does not work." << LL_ENDL;
         }
@@ -547,25 +545,6 @@ bool LLWindowSDL::createContext(int x, int y, int width, int height, int bits, b
         LL_WARNS() << "We're not running under any known WM. Wild." << LL_ENDL;
     }
 
-    // Detect video memory size.
-# if LL_X11
-    gGLManager.mVRAM = detectVRAM();
-    if (gGLManager.mVRAM != 0)
-    {
-        LL_INFOS() << "X11 log-parser detected " << gGLManager.mVRAM << "MB VRAM." << LL_ENDL;
-    } else
-# endif // LL_X11
-    {
-        // fallback to letting SDL detect VRAM.
-        // note: I've not seen SDL's detection ever actually find
-        // VRAM != 0, but if SDL *does* detect it then that's a bonus.
-        gGLManager.mVRAM = 0;
-        if (gGLManager.mVRAM != 0)
-        {
-            LL_INFOS() << "SDL detected " << gGLManager.mVRAM << "MB VRAM." << LL_ENDL;
-        }
-    }
-    // If VRAM is not detected, that is handled later
     SDL_StartTextInput();
     //make sure multisampling is disabled by default
     glDisable(GL_MULTISAMPLE_ARB);
@@ -926,7 +905,7 @@ bool LLWindowSDL::setGamma(const F32 gamma)
 
         mGamma = gamma;
         if (mGamma == 0)
-			mGamma = 0.1f;
+            mGamma = 0.1f;
         mGamma = 1.f / mGamma;
 
         SDL_CalculateGammaRamp(mGamma, ramp);
@@ -1245,7 +1224,48 @@ bool LLWindowSDL::SDLReallyCaptureInput(bool capture)
     if (!mFullscreen && mWindow ) /* only bother if we're windowed anyway */
         SDL_SetWindowGrab( mWindow, capture?SDL_TRUE:SDL_FALSE);
 
-    return capture;
+    if (capture)
+        mReallyCapturedCount = 1;
+    else
+        mReallyCapturedCount = 0;
+
+    bool wantGrab;
+    if (mReallyCapturedCount <= 0) // uncapture
+    {
+        wantGrab = false;
+    } else // capture
+    {
+        wantGrab = true;
+    }
+
+    if (mReallyCapturedCount < 0) // yuck, imbalance.
+    {
+        mReallyCapturedCount = 0;
+        LL_WARNS() << "ReallyCapture count was < 0" << LL_ENDL;
+    }
+
+    bool newGrab = wantGrab;
+
+    if (!mFullscreen) /* only bother if we're windowed anyway */
+    {
+        int result;
+        if (wantGrab == true)
+        {
+            result = SDL_CaptureMouse(SDL_TRUE);
+            if (0 == result)
+                newGrab = true;
+            else
+                newGrab = false;
+        }
+        else
+        {
+            newGrab = false;
+            result = SDL_CaptureMouse(SDL_FALSE);
+        }
+    }
+
+    // return boolean success for whether we ended up in the desired state
+    return capture == newGrab;
 }
 
 U32 LLWindowSDL::SDLCheckGrabbyKeys(U32 keysym, bool gain)
