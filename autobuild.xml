@@ -16,11 +16,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>6bbad9b30ee93749e4701313c537d5bac0850e2b</string>
+              <string>c53cf6b787a59d3c11ff7d398f91a8d27f132e6b</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-sdl2/releases/download/v2.30.6-r1/SDL2-2.30.6-linux64-10323260130.tar.zst</string>
+              <string>https://github.com/AiraYumi/3p-sdl2/releases/download/v2.30.7-with-libdecor/SDL2-2.30.7-linux64-11146760750.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
