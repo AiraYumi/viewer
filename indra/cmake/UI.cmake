@@ -13,6 +13,15 @@ if (LINUX)
     return()
   endif()
 
+  include(FindPkgConfig)
+  pkg_check_modules(WAYLAND_CLIENT wayland-client)
+
+  if( WAYLAND_CLIENT_FOUND )
+      target_compile_definitions( ll::uilibraries INTERFACE LL_WAYLAND=1)
+  else()
+      message("pkgconfig could not find wayland client, compiling without full wayland support")
+  endif()
+
   target_link_libraries( ll::uilibraries INTERFACE
           fltk
           Xrender
@@ -21,9 +30,10 @@ if (LINUX)
           Xext
           Xft
           Xinerama
+          X11
           ll::fontconfig
           ll::freetype
-          ll::SDL
+          ll::SDL2
           ll::glib
           ll::gio
   )

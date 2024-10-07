@@ -65,6 +65,7 @@
 
 bool gDebugSession = false;
 bool gDebugGLSession = false;
+bool gDebugTextureLabelLocalFilesSession = false;
 bool gClothRipple = false;
 bool gHeadlessClient = false;
 bool gNonInteractive = false;
@@ -994,9 +995,6 @@ LLGLManager::LLGLManager() :
     mIsAMD(false),
     mIsNVIDIA(false),
     mIsIntel(false),
-#if LL_DARWIN
-    mIsMobileGF(false),
-#endif
     mHasRequirements(true),
     mDriverVersionMajor(1),
     mDriverVersionMinor(0),
@@ -1143,7 +1141,11 @@ bool LLGLManager::initGL()
     // Trailing space necessary to keep "nVidia Corpor_ati_on" cards
     // from being recognized as ATI.
     // NOTE: AMD has been pretty good about not breaking this check, do not rename without good reason
-    if (mGLVendor.substr(0,4) == "ATI ")
+    if (mGLVendor.substr(0,4) == "ATI "
+#if LL_LINUX
+         || mGLVendor.find("AMD") != std::string::npos
+#endif //LL_LINUX
+         )
     {
         mGLVendorShort = "AMD";
         // *TODO: Fix this?
@@ -1431,7 +1433,10 @@ void LLGLManager::initExtensions()
     mHasDebugOutput = mGLVersion >= 4.29f;
 
 #if LL_WINDOWS || LL_LINUX
-    mHasNVXGpuMemoryInfo = ExtensionExists("GL_NVX_gpu_memory_info", gGLHExts.mSysExts);
+    if( gGLHExts.mSysExts )
+        mHasNVXGpuMemoryInfo = ExtensionExists("GL_NVX_gpu_memory_info", gGLHExts.mSysExts);
+    else
+        LL_WARNS() << "gGLHExts.mSysExts is not set.?" << LL_ENDL;
 #endif
 
     // Misc
