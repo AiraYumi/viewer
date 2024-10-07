@@ -39,7 +39,7 @@ jobs:
           echo "bugsplat_db=" >> $GITHUB_OUTPUT
   build:
     needs: setup
-    continue-on-error: ${{ matrix.experimental }}
+    continue-on-error: false
     strategy:
       matrix:
         runner: [windows-latest, macos-12, ubuntu-latest]
