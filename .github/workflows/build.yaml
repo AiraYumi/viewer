@@ -56,7 +56,7 @@ jobs:
           configuration: ReleaseOS
           experimental: true
         - runner: linux-large
-          if: ${{ github.event.pull_request.head.repo.fork == true }}
+          if: ${{ github.event.pull_request.head.repo.fork != true }}
           configuration: Release
           experimental: true
     runs-on: ${{ matrix.runner }}
