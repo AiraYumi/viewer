@@ -48,6 +48,7 @@ include(VulkanGltf)
 include(ZLIBNG)
 include(LLPrimitive)
 include(Lualibs)
+add_subdirectory(nfde)
 
 if (NOT HAVOK_TPV)
    # When using HAVOK_TPV, the library is precompiled, so no need for this
@@ -1944,6 +1945,7 @@ target_link_libraries(${VIEWER_BINARY_NAME}
         ll::ndof
         ll::tracy
         ll::openxr
+        nfd
         )
 
 if( TARGET ll::intel_memops )

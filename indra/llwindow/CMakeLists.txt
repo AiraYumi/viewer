@@ -19,7 +19,6 @@ include(UI)
 include(ViewerMiscLibs)
 include(GLM)
 include(SDL2)
-add_subdirectory(nfde)
 
 set(llwindow_SOURCE_FILES
     llcursortypes.cpp
@@ -187,7 +186,7 @@ if (SDL2_FOUND)
     )
 endif (SDL2_FOUND)
 
-  target_link_libraries (llwindow ${llwindow_LINK_LIBRARIES} nfd)
+  target_link_libraries (llwindow ${llwindow_LINK_LIBRARIES})
   target_include_directories(llwindow INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 if (DARWIN)
