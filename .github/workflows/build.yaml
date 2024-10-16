@@ -42,10 +42,10 @@ jobs:
     continue-on-error: ${{ matrix.experimental }}
     strategy:
       matrix:
-        runner: [windows-large, macos-14-xlarge]
+        runner: [windows-latest, macos-14]
         experimental: [false]
         include:
-        - runner: linux-large
+        - runner: ubuntu-latest
           configuration: ReleaseOS
           experimental: true
     runs-on: ${{ matrix.runner }}
@@ -332,7 +332,7 @@ jobs:
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       AZURE_TENANT_ID:     ${{ secrets.AZURE_TENANT_ID }}
     needs: build
-    runs-on: windows-large
+    runs-on: windows-latest
     steps:
       - name: Sign and package Windows viewer
         if: env.AZURE_KEY_VAULT_URI && env.AZURE_CERT_NAME && env.AZURE_CLIENT_ID && env.AZURE_CLIENT_SECRET && env.AZURE_TENANT_ID
