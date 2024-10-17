@@ -47,10 +47,10 @@ jobs:
     continue-on-error: ${{ matrix.experimental }}
     strategy:
       matrix:
-        runner: [windows-large, macos-14-xlarge]
+        runner: [windows-2022, macos-14]
         experimental: [false]
         include:
-        - runner: linux-large
+        - runner: ubuntu-22.04
           experimental: true
     runs-on: ${{ matrix.runner }}
     outputs:
@@ -72,7 +72,7 @@ jobs:
       # autobuild-package.xml.
       AUTOBUILD_VCS_INFO: "true"
       AUTOBUILD_VSVER: "170"
-      DEVELOPER_DIR: "/Applications/Xcode_14.3.1.app/Contents/Developer"
+      DEVELOPER_DIR: "/Applications/Xcode_16.0.app/Contents/Developer"
       # Ensure that Linden viewer builds engage Bugsplat.
       BUGSPLAT_DB: ${{ needs.setup.outputs.bugsplat_db }}
       build_coverity: false
@@ -250,7 +250,7 @@ jobs:
                   export viewer_channel="Second Life Test"
               fi
           fi
-          echo "viewer_channel=$viewer_channel"
+          echo "::notice::$RUNNER_OS viewer_channel=$viewer_channel"
           echo "viewer_channel=$viewer_channel" >> "$GITHUB_OUTPUT"
           # On windows we need to point the build to the correct python
           # as neither CMake's FindPython nor our custom Python.cmake module
@@ -335,7 +335,7 @@ jobs:
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       AZURE_TENANT_ID:     ${{ secrets.AZURE_TENANT_ID }}
     needs: build
-    runs-on: windows-large
+    runs-on: windows-2022
     steps:
       - name: Sign and package Windows viewer
         if: env.AZURE_KEY_VAULT_URI && env.AZURE_CERT_NAME && env.AZURE_CLIENT_ID && env.AZURE_CLIENT_SECRET && env.AZURE_TENANT_ID
