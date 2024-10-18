@@ -6,7 +6,7 @@ include(GLIB)
 add_library( ll::uilibraries INTERFACE IMPORTED )
 
 if (LINUX)
-  target_compile_definitions(ll::uilibraries INTERFACE LL_X11=1 )
+  target_compile_definitions(ll::uilibraries INTERFACE LL_X11=1 LL_NFD=1 )
 
   if( USE_CONAN )
     return()

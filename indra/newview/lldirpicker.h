@@ -36,7 +36,7 @@
 #include "llthread.h"
 #include <queue>
 
-#if LL_WINDOWS
+#if LL_WINDOWS && !LL_NFD
 #include <shlobj.h>
 #endif
 
