@@ -223,8 +223,6 @@ std::vector<nfdfilteritem_t> LLFilePicker::setupFilter(ELoadFilter filter)
     case FFLOAD_DICTIONARY:
         filter_vec.emplace_back(nfdfilteritem_t{"Dictionary files", "dic,xcu"});
         break;
-    case FFLOAD_ZIP:
-        filter_vec.emplace_back(nfdfilteritem_t{"ZIP files", "zip"});
     default:
         break;
     }
@@ -439,14 +437,7 @@ bool LLFilePicker::getSaveFile(ESaveFilter filter, const std::string& filename, 
         }
         filter_vec.emplace_back(nfdfilteritem_t{"PNG Images", "png"});
         break;
-    case FFSAVE_WEBP:
-        if (filename.empty())
-        {
-            saved_filename = "untitled.webp";
-        }
-        filter_vec.emplace_back(nfdfilteritem_t{"WebP Images", "webp"});
-        break;
-    case FFSAVE_TGAPNGWEBP:
+    case FFSAVE_TGAPNG:
         if (filename.empty())
         {
             saved_filename = "untitled.png";
