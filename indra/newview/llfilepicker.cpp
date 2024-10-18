@@ -470,13 +470,6 @@ bool LLFilePicker::getSaveFile(ESaveFilter filter, const std::string& filename, 
         }
         filter_vec.emplace_back(nfdfilteritem_t{"XAF Anim File", "xaf"});
         break;
-    case FFSAVE_CSV:
-        if (filename.empty())
-        {
-            saved_filename = "untitled.csv";
-        }
-        filter_vec.emplace_back(nfdfilteritem_t{"Comma seperated values", "csv"});
-        break;
     case FFSAVE_XML:
         if (filename.empty())
         {
