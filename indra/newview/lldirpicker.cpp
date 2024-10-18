@@ -88,7 +88,7 @@ void LLDirPicker::reset()
     mDir.clear();
 }
 
-BOOL LLDirPicker::getDir(std::string* filename, bool blocking)
+bool LLDirPicker::getDir(std::string* filename, bool blocking)
 {
     if( mLocked )
     {
@@ -101,7 +101,7 @@ BOOL LLDirPicker::getDir(std::string* filename, bool blocking)
         return FALSE;
     }
 
-    BOOL success = FALSE;
+    bool success = FALSE;
 
     if (blocking)
     {
