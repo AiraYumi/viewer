@@ -116,7 +116,7 @@ constexpr bool is_approx_zero(F32 f) { return (-F_APPROXIMATELY_ZERO < f) && (f 
 // infinity is comparable with F32_MIN
 
 // handles negative and positive zeros
-constexpr bool is_zero(F32 x)
+inline bool is_zero(F32 x)
 {
     return (*(U32*)(&x) & 0x7fffffff) == 0;
 }
