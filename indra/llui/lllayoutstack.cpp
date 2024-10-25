@@ -34,7 +34,11 @@
 #include "llpanel.h"
 #include "llcriticaldamp.h"
 #include "lliconctrl.h"
+#if defined(__GNUC__) && (__GNUC__ < 13)
+#include <boost/foreach.hpp>
+#else
 #include <ranges>
+#endif
 
 static constexpr F32 MIN_FRACTIONAL_SIZE = 0.00001f;
 static constexpr F32 MAX_FRACTIONAL_SIZE = 1.f;
@@ -853,7 +857,11 @@ void LLLayoutStack::updatePanelRect( LLLayoutPanel* resized_panel, const LLRect&
     LLLayoutPanel* other_resize_panel = nullptr;
     LLLayoutPanel* following_panel = nullptr;
 
+#if defined(__GNUC__) && (__GNUC__ < 13)
+    BOOST_REVERSE_FOREACH(LLLayoutPanel * panelp, mPanels)
+#else
     for (auto panelp : mPanels | std::views::reverse)
+#endif
     {
         if (panelp->mAutoResize)
         {
@@ -1012,7 +1020,11 @@ void LLLayoutStack::reshape(S32 width, S32 height, bool called_from_parent)
 void LLLayoutStack::updateResizeBarLimits()
 {
     LLLayoutPanel* previous_visible_panelp{ nullptr };
+#if defined(__GNUC__) && (__GNUC__ < 13)
+    BOOST_REVERSE_FOREACH(LLLayoutPanel * visible_panelp, mPanels)
+#else
     for (auto visible_panelp : mPanels | std::views::reverse)
+#endif
     {
         if (!visible_panelp->getVisible() || visible_panelp->mCollapsed)
         {
