@@ -45,7 +45,7 @@ jobs:
         runner: [windows-2022, macos-14]
         experimental: [false]
         include:
-        - runner: ubuntu-22.04
+        - runner: ubuntu-24.04
           experimental: true
     runs-on: ${{ matrix.runner }}
     outputs:
