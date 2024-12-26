@@ -124,12 +124,11 @@ bool LLCalc::evalString(const std::string& expression, F32& result)
     LLCalcParser calc(result, &mConstants, &mVariables);
 
     mLastErrorPos = 0;
-    std::string::iterator start = expr_upper.begin();
     parse_info<std::string::iterator> info;
 
     try
     {
-        info = parse(start, expr_upper.end(), calc, space_p);
+        info = parse(expr_upper.begin(), expr_upper.end(), calc, space_p);
         LL_DEBUGS() << "Math expression: " << expression << " = " << result << LL_ENDL;
     }
     catch(parser_error<std::string, std::string::iterator> &e)
