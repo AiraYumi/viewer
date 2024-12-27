@@ -66,6 +66,8 @@
 #include "llinventorymodel.h"
 #include "lluiusage.h"
 #include "lltranslate.h"
+#include "llluamanager.h"
+#include "scope_exit.h"
 
 // "Minimal Vulkan" to get max API Version
 
@@ -272,6 +274,16 @@ void LLViewerStats::updateFrameStats(const F64Seconds time_diff)
         // old stats that were never really used
         F64Seconds jit = (F64Seconds)std::fabs((mLastTimeDiff - time_diff));
         sample(LLStatViewer::FRAMETIME_JITTER, jit);
+
+        if (gFocusMgr.getAppHasFocus())
+        {
+            mForegroundFrameStats.push(F32(time_diff));
+        }
+        else
+        {
+            mBackgroundFrameStats.push(F32(time_diff));
+        }
+
     }
 
     mLastTimeDiff = time_diff;
@@ -509,7 +521,6 @@ void send_viewer_stats(bool include_preferences)
         return;
     }
 
-    LLSD body;
     std::string url = gAgent.getRegion()->getCapability("ViewerStats");
 
     if (url.empty()) {
@@ -517,15 +528,24 @@ void send_viewer_stats(bool include_preferences)
         return;
     }
 
-    LLViewerStats::instance().getRecording().pause();
+    LLSD body = capture_viewer_stats(include_preferences);
+    LLCoreHttpUtil::HttpCoroutineAdapter::messageHttpPost(url, body,
+        "Statistics posted to sim", "Failed to post statistics to sim");
+}
 
+LLSD capture_viewer_stats(bool include_preferences)
+{
+    LLViewerStats& vstats = LLViewerStats::instance();
+
+    vstats.getRecording().pause();
+    LL::scope_exit cleanup([&vstats]{ vstats.getRecording().resume(); });
+
+    LLSD body;
     LLSD &agent = body["agent"];
 
     time_t ltime;
     time(&ltime);
     F32 run_time = F32(LLFrameTimer::getElapsedSeconds());
-
-    agent["start_time"] = S32(ltime - S32(run_time));
 
     // The first stat set must have a 0 run time if it doesn't actually
     // contain useful data in terms of FPS, etc.  We use half the
@@ -541,8 +561,19 @@ void send_viewer_stats(bool include_preferences)
         agent["run_time"] = run_time;
     }
 
+    agent["start_time"] = S32(ltime - S32(run_time));
+
+    agent["fg_frame_stats"] = vstats.mForegroundFrameStats.asLLSD();
+    agent["fg_frame_stats"]["ofr"] = ofr(vstats.mForegroundFrameStats);
+    agent["fg_frame_stats"]["fps"] = fps(vstats.mForegroundFrameStats);
+
+    agent["bg_frame_stats"] = vstats.mBackgroundFrameStats.asLLSD();
+    agent["bg_frame_stats"]["ofr"] = ofr(vstats.mBackgroundFrameStats);
+    agent["bg_frame_stats"]["fps"] = fps(vstats.mBackgroundFrameStats);
+
     // report time the viewer has spent in the foreground
     agent["foreground_time"] = gForegroundTime.getElapsedTimeF32();
+    agent["foreground_frame_count"] = (S32) gForegroundFrameCount;
 
     // send fps only for time app spends in foreground
     agent["fps"] = (F32)gForegroundFrameCount / gForegroundTime.getElapsedTimeF32();
@@ -619,6 +650,10 @@ void send_viewer_stats(bool include_preferences)
 
 
     system["shader_level"] = shader_level;
+
+    LLSD &scripts = body["scripts"];
+    scripts["lua_scripts"] = LLLUAmanager::sScriptCount;
+    scripts["lua_auto_scripts"] = LLLUAmanager::sAutorunScriptCount;
 
     LLSD &download = body["downloads"];
 
@@ -774,7 +809,9 @@ void send_viewer_stats(bool include_preferences)
 
 
     LL_INFOS("LogViewerStatsPacket") << "Sending viewer statistics: " << body << LL_ENDL;
-    LL_DEBUGS("LogViewerStatsPacket");
+
+    // <ND> Do those lines even do anything sane in regard of debug logging?
+    LL_DEBUGS("LogViewerStatsPacket") << " ";
     std::string filename("viewer_stats_packet.xml");
     llofstream of(filename.c_str());
     LLSDSerialize::toPrettyXML(body,of);
@@ -784,10 +821,7 @@ void send_viewer_stats(bool include_preferences)
     body["session_id"] = gAgentSessionID;
 
     LLViewerStats::getInstance()->addToMessage(body);
-
-    LLCoreHttpUtil::HttpCoroutineAdapter::messageHttpPost(url, body,
-        "Statistics posted to sim", "Failed to post statistics to sim");
-    LLViewerStats::instance().getRecording().resume();
+    return body;
 }
 
 LLTimer& LLViewerStats::PhaseMap::getPhaseTimer(const std::string& phase_name)

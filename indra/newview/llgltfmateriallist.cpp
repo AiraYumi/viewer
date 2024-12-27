@@ -45,7 +45,9 @@
 #include "llworld.h"
 
 #include "tinygltf/tiny_gltf.h"
-#include <strstream>
+
+#include <boost/iostreams/device/array.hpp>
+#include <boost/iostreams/stream.hpp>
 
 #include <unordered_set>
 
@@ -168,7 +170,7 @@ namespace
 
 void LLGLTFMaterialList::applyOverrideMessage(LLMessageSystem* msg, const std::string& data_in)
 {
-    std::istringstream str(data_in);
+    boost::iostreams::stream<boost::iostreams::array_source> str(data_in.data(), data_in.size());
 
     LLSD data;
 
@@ -407,7 +409,7 @@ void LLGLTFMaterialList::flushUpdates(void(*done_callback)(bool))
     {
         callback_holder = std::make_shared<CallbackHolder>(done_callback);
     }
-    while (!sModifyQueue.empty() || !sApplyQueue.empty())
+    while (!sModifyQueue.empty() || !sApplyQueue.empty() || !sUpdates.isEmpty())
     {
         flushUpdatesOnce(callback_holder);
     }
@@ -539,8 +541,7 @@ void LLGLTFMaterialList::onAssetLoadComplete(const LLUUID& id, LLAssetType::ETyp
                 LLSD asset;
 
                 // read file into buffer
-                std::istrstream str(&buffer[0], static_cast<S32>(buffer.size()));
-
+                boost::iostreams::stream<boost::iostreams::array_source> str(buffer.data(), buffer.size());
                 if (LLSDSerialize::deserialize(asset, str, buffer.size()))
                 {
                     if (asset.has("version") && LLGLTFMaterial::isAcceptedVersion(asset["version"].asString()))

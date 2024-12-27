@@ -30,7 +30,6 @@ out vec4 frag_color;
 uniform sampler2D lightFunc;
 
 uniform vec3 env_mat[3];
-uniform float sun_wash;
 
 // light params
 uniform vec3 color;
@@ -43,7 +42,6 @@ in vec3 trans_center;
 uniform vec2 screen_res;
 
 uniform mat4 inv_proj;
-uniform vec4 viewport;
 uniform int classic_mode;
 
 void calcHalfVectors(vec3 lv, vec3 n, vec3 v, out vec3 h, out vec3 l, out float nh, out float nl, out float nv, out float vh, out float lightDist);

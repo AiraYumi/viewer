@@ -92,7 +92,7 @@ LLFloaterIMSession::LLFloaterIMSession(const LLUUID& session_id)
 
     LLTransientFloaterMgr::getInstance()->addControlView(LLTransientFloaterMgr::IM, this);
     mEnableCallbackRegistrar.add("Avatar.EnableGearItem", boost::bind(&LLFloaterIMSession::enableGearMenuItem, this, _2));
-    mCommitCallbackRegistrar.add("Avatar.GearDoToSelected", boost::bind(&LLFloaterIMSession::GearDoToSelected, this, _2));
+    mCommitCallbackRegistrar.add("Avatar.GearDoToSelected", { boost::bind(&LLFloaterIMSession::GearDoToSelected, this, _2), cb_info::UNTRUSTED_BLOCK });
     mEnableCallbackRegistrar.add("Avatar.CheckGearItem", boost::bind(&LLFloaterIMSession::checkGearMenuItem, this, _2));
     mVoiceChannelChanged = LLVoiceChannel::setCurrentVoiceChannelChangedCallback(boost::bind(&LLFloaterIMSession::onVoiceChannelChanged, this, _1));
 
@@ -142,7 +142,7 @@ void LLFloaterIMSession::onClickCloseBtn(bool app_qutting)
 {
     if (app_qutting)
     {
-        LLFloaterIMSessionTab::onClickCloseBtn();
+        LLFloaterIMSessionTab::onClickCloseBtn(app_qutting);
         return;
     }
 

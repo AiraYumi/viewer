@@ -37,6 +37,7 @@
 #include "llfloatersidepanelcontainer.h"
 #include "llfocusmgr.h"
 #include "lllogchat.h"
+#include "llregex.h"
 #include "llresizebar.h"
 #include "llresizehandle.h"
 #include "lldraghandle.h"
@@ -52,8 +53,10 @@
 
 #include "llfirstuse.h"
 #include "llfloaterimnearbychat.h"
+#include "llfloaterimnearbychatlistener.h"
 #include "llagent.h" // gAgent
 #include "llgesturemgr.h"
+#include "llluamanager.h"
 #include "llmultigesture.h"
 #include "llkeyboard.h"
 #include "llanimationstates.h"
@@ -70,6 +73,8 @@
 #include "lluiusage.h"
 
 S32 LLFloaterIMNearbyChat::sLastSpecialChatChannel = 0;
+
+static LLFloaterIMNearbyChatListener sChatListener;
 
 constexpr S32 EXPANDED_HEIGHT = 266;
 constexpr S32 COLLAPSED_HEIGHT = 60;
@@ -106,7 +111,7 @@ LLFloaterIMNearbyChat::LLFloaterIMNearbyChat(const LLSD& llsd)
     // Required by LLFloaterIMSessionTab::mGearBtn
     // But nearby floater has no 'per agent' menu items,
     mEnableCallbackRegistrar.add("Avatar.EnableGearItem", boost::bind(&cb_do_nothing));
-    mCommitCallbackRegistrar.add("Avatar.GearDoToSelected", boost::bind(&cb_do_nothing));
+    mCommitCallbackRegistrar.add("Avatar.GearDoToSelected", { boost::bind(&cb_do_nothing) });
     mEnableCallbackRegistrar.add("Avatar.CheckGearItem", boost::bind(&cb_do_nothing));
 
     mMinFloaterHeight = EXPANDED_MIN_HEIGHT;
@@ -603,6 +608,13 @@ void LLFloaterIMNearbyChat::sendChat( EChatType type )
                 if(!LLGestureMgr::instance().triggerAndReviseString(utf8text, &utf8_revised_text))
                 {
                     utf8_revised_text = utf8text;
+                    // check if the message is /filename.lua and execute the Lua script
+                    static const boost::regex is_lua_script("^/.*\\.luau?(?:\\s+\\S+)*$");
+                    if (ll_regex_match(utf8text, is_lua_script))
+                    {
+                        LLLUAmanager::runScriptFile(utf8text.substr(1));
+                        utf8_revised_text.clear();
+                    }
                 }
             }
             else

@@ -76,6 +76,7 @@
 #include "llslurl.h"
 #include "llstartup.h"
 #include "llperfstats.h"
+#include "rlvcommon.h"
 
 #if LL_DARWIN
 #include "llwindowmacosx.h"
@@ -801,6 +802,7 @@ void settings_setup_listeners()
     setting_setup_signal_listener(gSavedSettings, "OctreeAttachmentSizeFactor", handleRepartition);
     setting_setup_signal_listener(gSavedSettings, "RenderMaxTextureIndex", handleSetShaderChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderUIBuffer", handleWindowResized);
+    setting_setup_signal_listener(gSavedSettings, "RenderCAS", handleReleaseGLBufferChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderDepthOfField", handleReleaseGLBufferChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderFSAAType", handleReleaseGLBufferChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderSpecularResX", handleLUTBufferChanged);
@@ -948,6 +950,7 @@ void settings_setup_listeners()
     setting_setup_signal_listener(gSavedSettings, "AutoTuneImpostorByDistEnabled", handleUserImpostorByDistEnabledChanged);
     setting_setup_signal_listener(gSavedSettings, "TuningFPSStrategy", handleFPSTuningStrategyChanged);
     {
+        setting_setup_signal_listener(gSavedSettings, "LocalTerrainPaintEnabled", handleSetShaderChanged);
         setting_setup_signal_listener(gSavedSettings, "LocalTerrainPaintEnabled", handleLocalTerrainChanged);
         const char* transform_suffixes[] = {
             "ScaleU",
@@ -970,6 +973,8 @@ void settings_setup_listeners()
     setting_setup_signal_listener(gSavedSettings, "TerrainPaintBitDepth", handleSetShaderChanged);
 
     setting_setup_signal_listener(gSavedPerAccountSettings, "AvatarHoverOffsetZ", handleAvatarHoverOffsetChanged);
+
+    setting_setup_signal_listener(gSavedSettings, Rlv::Settings::TopLevelMenu, Rlv::Util::menuToggleVisible);
 }
 
 #if TEST_CACHED_CONTROL

@@ -36,11 +36,9 @@ LLGLTexture::LLGLTexture(bool usemipmaps)
 LLGLTexture::LLGLTexture(const U32 width, const U32 height, const U8 components, bool usemipmaps)
 {
     init();
-    mFullWidth = width ;
-    mFullHeight = height ;
+    setDimensions(width, height);
     mUseMipMaps = usemipmaps;
-    mComponents = components ;
-    setTexelsPerImage();
+    mComponents = components;
 }
 
 LLGLTexture::LLGLTexture(const LLImageRaw* raw, bool usemipmaps)
@@ -49,10 +47,8 @@ LLGLTexture::LLGLTexture(const LLImageRaw* raw, bool usemipmaps)
     mUseMipMaps = usemipmaps ;
     // Create an empty image of the specified size and width
     mGLTexturep = new LLImageGL(raw, usemipmaps) ;
-    mFullWidth = mGLTexturep->getWidth();
-    mFullHeight = mGLTexturep->getHeight();
+    setDimensions(mGLTexturep->getWidth(), mGLTexturep->getHeight());
     mComponents = mGLTexturep->getComponents();
-    setTexelsPerImage();
 }
 
 LLGLTexture::~LLGLTexture()
@@ -130,7 +126,7 @@ void LLGLTexture::generateGLTexture()
 {
     if(mGLTexturep.isNull())
     {
-        mGLTexturep = new LLImageGL(mFullWidth, mFullHeight, mComponents, mUseMipMaps) ;
+        mGLTexturep = new LLImageGL(getFullWidth(), getFullHeight(), mComponents, mUseMipMaps) ;
     }
 }
 
@@ -159,13 +155,91 @@ bool LLGLTexture::createGLTexture(S32 discard_level, const LLImageRaw* imageraw,
 
     if(ret)
     {
-        mFullWidth = mGLTexturep->getCurrentWidth() ;
-        mFullHeight = mGLTexturep->getCurrentHeight() ;
-        mComponents = mGLTexturep->getComponents() ;
-        setTexelsPerImage();
+        setDimensions(mGLTexturep->getCurrentWidth(), mGLTexturep->getCurrentHeight());
+        mComponents = mGLTexturep->getComponents();
     }
 
     return ret ;
+}
+
+void LLGLTexture::getGLObjectLabel(std::string& label, bool& error) const
+{
+    // GL_VERSION_4_3
+    if (gGLManager.mGLVersion < 4.29f)
+    {
+        error = true;
+        label.clear();
+        return;
+    }
+    if (!mGLTexturep)
+    {
+        error = true;
+        label.clear();
+        return;
+    }
+    LLGLuint texname = mGLTexturep->getTexName();
+    if (!texname)
+    {
+        error = true;
+        label.clear();
+        return;
+    }
+
+#if LL_DARWIN
+    // apple doesn't support GL after 4.1 so should have hit the above early out, but make the compiler happy here
+    error = true;
+    label.clear();
+    return;
+#else
+    static GLsizei max_length = 0;
+    if (max_length == 0) { glGetIntegerv(GL_MAX_LABEL_LENGTH, &max_length); }
+    static char * clabel = new char[max_length+1];
+    GLsizei length;
+    glGetObjectLabel(GL_TEXTURE, texname, max_length+1, &length, clabel);
+    error = false;
+    label.assign(clabel, length);
+#endif
+}
+
+std::string LLGLTexture::setGLObjectLabel(const std::string& prefix, bool append_texname) const
+{
+#ifndef LL_DARWIN // apple doesn't support GL > 4.1
+    if (gGLManager.mGLVersion < 4.29f) { return ""; } // GL_VERSION_4_3
+    llassert(mGLTexturep);
+    if (mGLTexturep)
+    {
+        LLGLuint texname = mGLTexturep->getTexName();
+        llassert(texname);
+        if (texname)
+        {
+            static GLsizei max_length = 0;
+            if (max_length == 0) { glGetIntegerv(GL_MAX_LABEL_LENGTH, &max_length); }
+
+            if (append_texname)
+            {
+                std::string label_with_texname = prefix + "_" + std::to_string(texname);
+                label_with_texname.resize(std::min(size_t(max_length), label_with_texname.size()));
+                glObjectLabel(GL_TEXTURE, texname, (GLsizei)label_with_texname.size(), label_with_texname.c_str());
+                return label_with_texname;
+            }
+            else
+            {
+                if (prefix.size() <= max_length)
+                {
+                    glObjectLabel(GL_TEXTURE, texname, (GLsizei)prefix.size(), prefix.c_str());
+                    return prefix;
+                }
+                else
+                {
+                    const std::string label(prefix.c_str(), max_length);
+                    glObjectLabel(GL_TEXTURE, texname, (GLsizei)label.size(), label.c_str());
+                    return label;
+                }
+            }
+        }
+    }
+#endif
+    return "";
 }
 
 void LLGLTexture::setExplicitFormat(LLGLint internal_format, LLGLenum primary_format, LLGLenum type_format, bool swap_bytes)
@@ -367,11 +441,11 @@ void LLGLTexture::destroyGLTexture()
     }
 }
 
-void LLGLTexture::setTexelsPerImage()
+void LLGLTexture::setDimensions(U32 width, U32 height)
 {
-    U32 fullwidth = llmin(mFullWidth,U32(MAX_IMAGE_SIZE_DEFAULT));
-    U32 fullheight = llmin(mFullHeight,U32(MAX_IMAGE_SIZE_DEFAULT));
-    mTexelsPerImage = (U32)fullwidth * fullheight;
+    mFullWidth = width;
+    mFullHeight = height;
+    mTexelsPerImage = llmin(width, MAX_IMAGE_SIZE_DEFAULT) * llmin(height, MAX_IMAGE_SIZE_DEFAULT);
 }
 
 static LLUUID sStubUUID;

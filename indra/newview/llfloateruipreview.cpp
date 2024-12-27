@@ -253,7 +253,7 @@ class LLFadeEventTimer : public LLEventTimer
 {
 public:
     LLFadeEventTimer(F32 refresh, LLGUIPreviewLiveFile* parent);
-    bool tick();
+    bool tick() override;
     LLGUIPreviewLiveFile* mParent;
 private:
     bool mFadingOut;            // fades in then out; this is toggled in between
@@ -701,13 +701,9 @@ void LLFloaterUIPreview::refreshList()
 // Note: no deduplification (shouldn't be necessary)
 void LLFloaterUIPreview::addFloaterEntry(const std::string& path)
 {
-    LLUUID* entry_id = new LLUUID();                // create a new UUID
-    entry_id->generate(path);
-    const LLUUID& entry_id_ref = *entry_id;         // get a reference to the UUID for the LLSD block
-
     // fill LLSD column entry: initialize row/col structure
     LLSD row;
-    row["id"] = entry_id_ref;
+    row["id"] = LLUUID::generateNewID(path); // create a new UUID;
     LLSD& columns = row["columns"];
 
     // Get name of floater:

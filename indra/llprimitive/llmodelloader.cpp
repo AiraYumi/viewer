@@ -58,7 +58,7 @@ static void stretch_extents(const LLModel* model, const LLMatrix4a& mat, LLVecto
         center.setAdd(face.mExtents[0], face.mExtents[1]);
         center.mul(0.5f);
         LLVector4a size;
-        size.setSub(face.mExtents[1],face.mExtents[0]);
+        size.setSub(face.mExtents[1], face.mExtents[0]);
         size.mul(0.5f);
 
         for (U32 i = 0; i < 8; i++)

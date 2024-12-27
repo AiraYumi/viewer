@@ -47,6 +47,7 @@ public:
 
     bool postBuild() override;
     void onOpen(const LLSD& key) override;
+    void onClose(bool app_quitting) override;
 
     void setItem(const uuid_set_t& items);
     void updateItem(const uuid_set_t& items, U32 mask);
@@ -62,15 +63,17 @@ private:
     void onSaveClicked();
     void onCancelClicked();
 
-    void folderCreatedCallback(LLUUID folder_id);
+    static void folderCreatedCallback(LLUUID folder_id);
 
-    LLComboBox*     mFolderCombo;
-    LLLineEditor*   mLandmarkTitleEditor;
-    LLTextEditor*   mNotesEditor;
+    LLComboBox*     mFolderCombo { nullptr };
+    LLLineEditor*   mLandmarkTitleEditor { nullptr };
+    LLTextEditor*   mNotesEditor { nullptr };
     LLUUID          mLandmarksID;
     LLUUID          mAssetID;
+    LLUUID          mParentID;
+    bool            mHasCustomPosition { false };
 
-    LLLandmarksInventoryObserver*   mInventoryObserver;
+    LLLandmarksInventoryObserver*   mInventoryObserver { nullptr };
     LLPointer<LLInventoryItem>      mItem;
 };
 

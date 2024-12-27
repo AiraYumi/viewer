@@ -58,12 +58,6 @@
 #include "llmeshrepository.h"
 #include "llskinningutil.h"
 
-#if LL_LINUX
-// Work-around spurious used before init warning on Vector4a
-//
-#pragma GCC diagnostic ignored "-Wuninitialized"
-#endif
-
 #define LL_MAX_INDICES_COUNT 1000000
 
 static LLStaticHashedString sTextureIndexIn("texture_index_in");
@@ -842,7 +836,6 @@ bool LLFace::genVolumeBBoxes(const LLVolume &volume, S32 f,
         //VECTORIZE THIS
         LLMatrix4a mat_vert;
         mat_vert.loadu(mat_vert_in);
-        LLVector4a new_extents[2];
 
         llassert(less_than_max_mag(face.mExtents[0]));
         llassert(less_than_max_mag(face.mExtents[1]));
@@ -1564,7 +1557,7 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
             }
 
             U8 texgen = getTextureEntry()->getTexGen();
-            if (rebuild_tcoord && texgen != LLTextureEntry::TEX_GEN_DEFAULT)
+            if (texgen != LLTextureEntry::TEX_GEN_DEFAULT)
             { //planar texgen needs binormals
                 mVObjp->getVolume()->genTangents(face_index);
             }

@@ -96,6 +96,7 @@ LLNetMap::LLNetMap (const Params & p)
     mPopupWorldPos(0.f, 0.f, 0.f),
     mMouseDown(0, 0),
     mPanning(false),
+    mCentering(false),
     mUpdateNow(false),
     mObjectImageCenterGlobal( gAgentCamera.getCameraPositionGlobal() ),
     mObjectRawImagep(),
@@ -128,7 +129,7 @@ LLNetMap::~LLNetMap()
 
 bool LLNetMap::postBuild()
 {
-    LLUICtrl::CommitCallbackRegistry::ScopedRegistrar commitRegistrar;
+    LLUICtrl::ScopedRegistrarHelper commitRegistrar;
     LLUICtrl::EnableCallbackRegistry::ScopedRegistrar enableRegistrar;
 
     enableRegistrar.add("Minimap.Zoom.Check", boost::bind(&LLNetMap::isZoomChecked, this, _2));

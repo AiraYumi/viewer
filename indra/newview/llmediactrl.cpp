@@ -345,8 +345,8 @@ bool LLMediaCtrl::handleRightMouseDown( S32 x, S32 y, MASK mask )
     auto menu = mContextMenuHandle.get();
     if (!menu)
     {
-        LLUICtrl::CommitCallbackRegistry::ScopedRegistrar registar;
-        registar.add("Open.WebInspector", boost::bind(&LLMediaCtrl::onOpenWebInspector, this));
+        LLUICtrl::ScopedRegistrarHelper registrar;
+        registrar.add("Open.WebInspector", boost::bind(&LLMediaCtrl::onOpenWebInspector, this));
 
         // stinson 05/05/2014 : use this as the parent of the context menu if the static menu
         // container has yet to be created
@@ -1022,10 +1022,6 @@ void LLMediaCtrl::handleMediaEvent(LLPluginClassMedia* self, EMediaEvent event)
         case MEDIA_EVENT_NAVIGATE_COMPLETE:
         {
             LL_DEBUGS("Media") <<  "Media event:  MEDIA_EVENT_NAVIGATE_COMPLETE, result string is: " << self->getNavigateResultString() << LL_ENDL;
-            if(mHidingInitialLoad)
-            {
-                mHidingInitialLoad = false;
-            }
         };
         break;
 

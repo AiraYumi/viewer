@@ -126,7 +126,7 @@
 #define A_GCC 1
 #pragma GCC diagnostic ignored "-Wunused-function"
 #pragma GCC diagnostic ignored "-Wunused-variable"
-#if LL_LINUX
+#if LL_LINUX && defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic ignored "-Wrestrict"
 #endif
 #endif
@@ -139,7 +139,6 @@ bool gShiftFrame = false;
 //cached settings
 bool LLPipeline::WindLightUseAtmosShaders;
 bool LLPipeline::RenderDeferred;
-F32 LLPipeline::RenderDeferredSunWash;
 U32 LLPipeline::RenderFSAAType;
 U32 LLPipeline::RenderResolutionDivisor;
 bool LLPipeline::RenderUIBuffer;
@@ -180,7 +179,6 @@ F32 LLPipeline::CameraFocusTransitionTime;
 F32 LLPipeline::CameraFNumber;
 F32 LLPipeline::CameraFocalLength;
 F32 LLPipeline::CameraFieldOfView;
-F32 LLPipeline::RenderShadowNoise;
 F32 LLPipeline::RenderShadowBlurSize;
 F32 LLPipeline::RenderSSAOScale;
 U32 LLPipeline::RenderSSAOMaxScale;
@@ -193,8 +191,6 @@ F32 LLPipeline::RenderShadowBias;
 F32 LLPipeline::RenderSpotShadowOffset;
 F32 LLPipeline::RenderSpotShadowBias;
 LLDrawable* LLPipeline::RenderSpotLight = nullptr;
-F32 LLPipeline::RenderEdgeDepthCutoff;
-F32 LLPipeline::RenderEdgeNormCutoff;
 LLVector3 LLPipeline::RenderShadowGaussian;
 F32 LLPipeline::RenderShadowBlurDistFactor;
 bool LLPipeline::RenderDeferredAtmospheric;
@@ -277,7 +273,6 @@ static LLTrace::BlockTimerStatHandle FTM_STATESORT_DRAWABLE("Sort Drawables");
 static LLStaticHashedString sTint("tint");
 static LLStaticHashedString sAmbiance("ambiance");
 static LLStaticHashedString sAlphaScale("alpha_scale");
-static LLStaticHashedString sNormMat("norm_mat");
 static LLStaticHashedString sOffset("offset");
 static LLStaticHashedString sScreenRes("screenRes");
 static LLStaticHashedString sDelta("delta");
@@ -520,7 +515,6 @@ void LLPipeline::init()
     connectRefreshCachedSettingsSafe("UseOcclusion");
     // DEPRECATED -- connectRefreshCachedSettingsSafe("WindLightUseAtmosShaders");
     // DEPRECATED -- connectRefreshCachedSettingsSafe("RenderDeferred");
-    connectRefreshCachedSettingsSafe("RenderDeferredSunWash");
     connectRefreshCachedSettingsSafe("RenderFSAAType");
     connectRefreshCachedSettingsSafe("RenderResolutionDivisor");
     connectRefreshCachedSettingsSafe("RenderUIBuffer");
@@ -561,7 +555,6 @@ void LLPipeline::init()
     connectRefreshCachedSettingsSafe("CameraFNumber");
     connectRefreshCachedSettingsSafe("CameraFocalLength");
     connectRefreshCachedSettingsSafe("CameraFieldOfView");
-    connectRefreshCachedSettingsSafe("RenderShadowNoise");
     connectRefreshCachedSettingsSafe("RenderShadowBlurSize");
     connectRefreshCachedSettingsSafe("RenderSSAOScale");
     connectRefreshCachedSettingsSafe("RenderSSAOMaxScale");
@@ -573,8 +566,6 @@ void LLPipeline::init()
     connectRefreshCachedSettingsSafe("RenderShadowBias");
     connectRefreshCachedSettingsSafe("RenderSpotShadowOffset");
     connectRefreshCachedSettingsSafe("RenderSpotShadowBias");
-    connectRefreshCachedSettingsSafe("RenderEdgeDepthCutoff");
-    connectRefreshCachedSettingsSafe("RenderEdgeNormCutoff");
     connectRefreshCachedSettingsSafe("RenderShadowGaussian");
     connectRefreshCachedSettingsSafe("RenderShadowBlurDistFactor");
     connectRefreshCachedSettingsSafe("RenderDeferredAtmospheric");
@@ -595,6 +586,7 @@ void LLPipeline::init()
     connectRefreshCachedSettingsSafe("RenderScreenSpaceReflectionAdaptiveStepMultiplier");
     connectRefreshCachedSettingsSafe("RenderScreenSpaceReflectionGlossySamples");
     connectRefreshCachedSettingsSafe("RenderBufferVisualization");
+    connectRefreshCachedSettingsSafe("RenderBufferClearOnInvalidate");
     connectRefreshCachedSettingsSafe("RenderMirrors");
     connectRefreshCachedSettingsSafe("RenderHeroProbeUpdateRate");
     connectRefreshCachedSettingsSafe("RenderHeroProbeConservativeUpdateMultiplier");
@@ -804,8 +796,8 @@ bool LLPipeline::allocateScreenBufferInternal(U32 resX, U32 resY)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DISPLAY;
 
-    static LLCachedControl<bool> has_hdr(gSavedSettings, "RenderHDREnabled", true);
-    bool hdr = gGLManager.mGLVersion > 4.05f && has_hdr();
+    static LLCachedControl<bool> render_hdr(gSavedSettings, "RenderHDREnabled", true);
+    bool hdr = gGLManager.mGLVersion > 4.05f && render_hdr;
 
     if (mRT == &mMainRT)
     { // hacky -- allocate auxillary buffer
@@ -858,8 +850,9 @@ bool LLPipeline::allocateScreenBufferInternal(U32 resX, U32 resY)
 
     mRT->deferredScreen.shareDepthBuffer(mRT->screen);
 
-    if (shadow_detail > 0 || ssao || RenderDepthOfField)
-    { //only need mRT->deferredLight for shadows OR ssao OR dof
+    static LLCachedControl<bool> render_cas(gSavedSettings, "RenderCAS", true);
+    if (shadow_detail > 0 || ssao || render_cas)
+    { //only need mRT->deferredLight for shadows OR ssao
         if (!mRT->deferredLight.allocate(resX, resY, screenFormat)) return false;
     }
     else
@@ -879,13 +872,18 @@ bool LLPipeline::allocateScreenBufferInternal(U32 resX, U32 resY)
             }
         }
 
-        if (RenderFSAAType > 0)
+        if (RenderFSAAType > 0 || RenderDepthOfField)
         {
             if (!mFXAAMap.allocate(resX, resY, GL_RGBA)) return false;
             if (RenderFSAAType == 2)
             {
                 if (!mSMAABlendBuffer.allocate(resX, resY, GL_RGBA, false)) return false;
             }
+            else
+            {
+                mSMAABlendBuffer.release();
+            }
+
         }
         else
         {
@@ -905,7 +903,8 @@ bool LLPipeline::allocateScreenBufferInternal(U32 resX, U32 resY)
             mSceneMap.release();
         }
 
-        mPostMap.allocate(resX, resY, screenFormat);
+        mPostPingMap.allocate(resX, resY, screenFormat);
+        mPostPongMap.allocate(resX, resY, screenFormat);
 
         // used to scale down textures
         // See LLViwerTextureList::updateImagesCreateTextures and LLImageGL::scaleDown
@@ -914,7 +913,8 @@ bool LLPipeline::allocateScreenBufferInternal(U32 resX, U32 resY)
         mBakeMap.allocate(LLAvatarAppearanceDefines::SCRATCH_TEX_WIDTH, LLAvatarAppearanceDefines::SCRATCH_TEX_HEIGHT, GL_RGBA);
     }
     //HACK make screenbuffer allocations start failing after 30 seconds
-    if (gSavedSettings.getBOOL("SimulateFBOFailure"))
+    static LLCachedControl<bool> simulate_fbo_failure(gSavedSettings, "SimulateFBOFailure", false);
+    if (simulate_fbo_failure)
     {
         return false;
     }
@@ -1041,7 +1041,6 @@ void LLPipeline::refreshCachedSettings()
 
     WindLightUseAtmosShaders = true; // DEPRECATED -- gSavedSettings.getBOOL("WindLightUseAtmosShaders");
     RenderDeferred = true; // DEPRECATED -- gSavedSettings.getBOOL("RenderDeferred");
-    RenderDeferredSunWash = gSavedSettings.getF32("RenderDeferredSunWash");
     RenderFSAAType = gSavedSettings.getU32("RenderFSAAType");
     RenderResolutionDivisor = gSavedSettings.getU32("RenderResolutionDivisor");
     RenderUIBuffer = gSavedSettings.getBOOL("RenderUIBuffer");
@@ -1082,7 +1081,6 @@ void LLPipeline::refreshCachedSettings()
     CameraFNumber = gSavedSettings.getF32("CameraFNumber");
     CameraFocalLength = gSavedSettings.getF32("CameraFocalLength");
     CameraFieldOfView = gSavedSettings.getF32("CameraFieldOfView");
-    RenderShadowNoise = gSavedSettings.getF32("RenderShadowNoise");
     RenderShadowBlurSize = gSavedSettings.getF32("RenderShadowBlurSize");
     RenderSSAOScale = gSavedSettings.getF32("RenderSSAOScale");
     RenderSSAOMaxScale = gSavedSettings.getU32("RenderSSAOMaxScale");
@@ -1094,8 +1092,6 @@ void LLPipeline::refreshCachedSettings()
     RenderShadowBias = gSavedSettings.getF32("RenderShadowBias");
     RenderSpotShadowOffset = gSavedSettings.getF32("RenderSpotShadowOffset");
     RenderSpotShadowBias = gSavedSettings.getF32("RenderSpotShadowBias");
-    RenderEdgeDepthCutoff = gSavedSettings.getF32("RenderEdgeDepthCutoff");
-    RenderEdgeNormCutoff = gSavedSettings.getF32("RenderEdgeNormCutoff");
     RenderShadowGaussian = gSavedSettings.getVector3("RenderShadowGaussian");
     RenderShadowBlurDistFactor = gSavedSettings.getF32("RenderShadowBlurDistFactor");
     RenderDeferredAtmospheric = gSavedSettings.getBOOL("RenderDeferredAtmospheric");
@@ -1116,6 +1112,7 @@ void LLPipeline::refreshCachedSettings()
     RenderScreenSpaceReflectionAdaptiveStepMultiplier = gSavedSettings.getF32("RenderScreenSpaceReflectionAdaptiveStepMultiplier");
     RenderScreenSpaceReflectionGlossySamples = gSavedSettings.getS32("RenderScreenSpaceReflectionGlossySamples");
     RenderBufferVisualization = gSavedSettings.getS32("RenderBufferVisualization");
+    LLRenderTarget::sClearOnInvalidate = gSavedSettings.getBOOL("RenderBufferClearOnInvalidate");
     RenderMirrors = gSavedSettings.getBOOL("RenderMirrors");
     RenderHeroProbeUpdateRate = gSavedSettings.getS32("RenderHeroProbeUpdateRate");
     RenderHeroProbeConservativeUpdateMultiplier = gSavedSettings.getS32("RenderHeroProbeConservativeUpdateMultiplier");
@@ -1166,7 +1163,8 @@ void LLPipeline::releaseGLBuffers()
 
     mSceneMap.release();
 
-    mPostMap.release();
+    mPostPingMap.release();
+    mPostPongMap.release();
 
     mFXAAMap.release();
 
@@ -3516,8 +3514,6 @@ void LLPipeline::postSort(LLCamera &camera)
 
     assertInitialized();
 
-    LL_PUSH_CALLSTACKS();
-
     if (!gCubeSnapshot)
     {
         // rebuild drawable geometry
@@ -3533,14 +3529,11 @@ void LLPipeline::postSort(LLCamera &camera)
                 group->rebuildGeom();
             }
         }
-        LL_PUSH_CALLSTACKS();
         // rebuild groups
         sCull->assertDrawMapsEmpty();
 
         rebuildPriorityGroups();
     }
-
-    LL_PUSH_CALLSTACKS();
 
     // build render map
     for (LLCullResult::sg_iterator i = sCull->beginVisibleGroups(); i != sCull->endVisibleGroups(); ++i)
@@ -3557,11 +3550,6 @@ void LLPipeline::postSort(LLCamera &camera)
              group->mSurfaceArea > RenderAutoHideSurfaceAreaLimit * llmax(group->mObjectBoxSize, 10.f)))
         {
             continue;
-        }
-
-        if (group->hasState(LLSpatialGroup::NEW_DRAWINFO) && group->hasState(LLSpatialGroup::GEOM_DIRTY) && !gCubeSnapshot)
-        {  // no way this group is going to be drawable without a rebuild
-            group->rebuildGeom();
         }
 
         for (LLSpatialGroup::draw_map_t::iterator j = group->mDrawMap.begin(); j != group->mDrawMap.end(); ++j)
@@ -3662,7 +3650,6 @@ void LLPipeline::postSort(LLCamera &camera)
         std::sort(sCull->beginRiggedAlphaGroups(), sCull->endRiggedAlphaGroups(), LLSpatialGroup::CompareRenderOrder());
     }
 
-    LL_PUSH_CALLSTACKS();
     // only render if the flag is set. The flag is only set if we are in edit mode or the toggle is set in the menus
     if (LLFloaterReg::instanceVisible("beacons") && !sShadowRender && !gCubeSnapshot)
     {
@@ -3715,7 +3702,7 @@ void LLPipeline::postSort(LLCamera &camera)
             forAllVisibleDrawables(renderSoundHighlights);
         }
     }
-    LL_PUSH_CALLSTACKS();
+
     // If managing your telehub, draw beacons at telehub and currently selected spawnpoint.
     if (LLFloaterTelehub::renderBeacons() && !sShadowRender && !gCubeSnapshot)
     {
@@ -3727,7 +3714,7 @@ void LLPipeline::postSort(LLCamera &camera)
         mSelectedFaces.clear();
 
         bool tex_index_changed = false;
-        if (!gNonInteractive)
+        if (!gNonInteractive && gFloaterTools)
         {
             LLRender::eTexIndex tex_index = sRenderHighlightTextureChannel;
             setRenderHighlightTextureChannel(gFloaterTools->getPanelFace()->getTextureChannelToEdit());
@@ -3776,7 +3763,6 @@ void LLPipeline::postSort(LLCamera &camera)
 
     LLVertexBuffer::flushBuffers();
     // LLSpatialGroup::sNoDelete = false;
-    LL_PUSH_CALLSTACKS();
 }
 
 
@@ -6951,7 +6937,10 @@ static LLTrace::BlockTimerStatHandle FTM_RENDER_BLOOM("Bloom");
 
 void LLPipeline::visualizeBuffers(LLRenderTarget* src, LLRenderTarget* dst, U32 bufferIndex)
 {
-    dst->bindTarget();
+    if (dst)
+    {
+        dst->bindTarget();
+    }
     gDeferredBufferVisualProgram.bind();
     gDeferredBufferVisualProgram.bindTexture(LLShaderMgr::DEFERRED_DIFFUSE, src, false, LLTexUnit::TFO_BILINEAR, bufferIndex);
 
@@ -6964,7 +6953,10 @@ void LLPipeline::visualizeBuffers(LLRenderTarget* src, LLRenderTarget* dst, U32 
     mScreenTriangleVB->setBuffer();
     mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
     gDeferredBufferVisualProgram.unbind();
-    dst->flush();
+    if (dst)
+    {
+        dst->flush();
+    }
 }
 
 void LLPipeline::generateLuminance(LLRenderTarget* src, LLRenderTarget* dst)
@@ -7129,12 +7121,13 @@ void LLPipeline::generateExposure(LLRenderTarget* src, LLRenderTarget* dst, bool
 
 extern LLPointer<LLImageGL> gEXRImage;
 
-void LLPipeline::tonemap(LLRenderTarget* src, LLRenderTarget* dst)
+void LLPipeline::tonemap(LLRenderTarget* src, LLRenderTarget* dst, bool gamma_correct/* = true*/)
 {
-    dst->bindTarget();
     // gamma correct lighting
     {
         LL_PROFILE_GPU_ZONE("tonemap");
+
+        dst->bindTarget();
 
         static LLCachedControl<bool> buildNoPost(gSavedSettings, "RenderDisablePostProcessing", false);
 
@@ -7146,18 +7139,26 @@ void LLPipeline::tonemap(LLRenderTarget* src, LLRenderTarget* dst)
 
         LLSettingsSky::ptr_t psky = LLEnvironment::instance().getCurrentSky();
 
-        bool no_post = gSnapshotNoPost || psky->getReflectionProbeAmbiance(should_auto_adjust) == 0.f || (buildNoPost && gFloaterTools->isAvailable());
-        LLGLSLShader& shader = no_post ? gNoPostTonemapProgram : gDeferredPostTonemapProgram;
+        bool no_post = gSnapshotNoPost || (buildNoPost && gFloaterTools && gFloaterTools->isAvailable());
+        LLGLSLShader* shader = nullptr;
+        if (gamma_correct)
+        {
+            shader = no_post ? &gDeferredPostGammaCorrectProgram : // no post (no legacy gamma adjustment, no exposure, no tonemapping, still srgb corrected)
+                psky->getReflectionProbeAmbiance(should_auto_adjust) == 0.f ? &gLegacyPostGammaCorrectProgram :
+                &gDeferredPostTonemapGammaCorrectProgram;
+        }
+        else
+        {
+            shader = (psky->getReflectionProbeAmbiance(should_auto_adjust) == 0.f || no_post) ? &gNoPostTonemapProgram : &gDeferredPostTonemapProgram;
+        }
 
-        shader.bind();
+        shader->bind();
 
         S32 channel = 0;
 
-        shader.bindTexture(LLShaderMgr::DEFERRED_DIFFUSE, src, false, LLTexUnit::TFO_POINT);
-
-        shader.bindTexture(LLShaderMgr::EXPOSURE_MAP, &mExposureMap);
-
-        shader.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES, (GLfloat)src->getWidth(), (GLfloat)src->getHeight());
+        shader->bindTexture(LLShaderMgr::DEFERRED_DIFFUSE, src, false, LLTexUnit::TFO_POINT);
+        shader->bindTexture(LLShaderMgr::EXPOSURE_MAP, &mExposureMap);
+        shader->uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES, (GLfloat)src->getWidth(), (GLfloat)src->getHeight());
 
         static LLCachedControl<F32> exposure(gSavedSettings, "RenderExposure", 1.f);
 
@@ -7167,35 +7168,36 @@ void LLPipeline::tonemap(LLRenderTarget* src, LLRenderTarget* dst)
         static LLStaticHashedString tonemap_mix("tonemap_mix");
         static LLStaticHashedString tonemap_type("tonemap_type");
 
-        shader.uniform1f(s_exposure, e);
+        shader->uniform1f(s_exposure, e);
 
         static LLCachedControl<U32> tonemap_type_setting(gSavedSettings, "RenderTonemapType", 0U);
-        shader.uniform1i(tonemap_type, tonemap_type_setting);
-        shader.uniform1f(tonemap_mix, psky->getTonemapMix());
+        shader->uniform1i(tonemap_type, tonemap_type_setting);
+        shader->uniform1f(tonemap_mix, psky->getTonemapMix());
 
         mScreenTriangleVB->setBuffer();
         mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
 
         gGL.getTexUnit(channel)->unbind(src->getUsage());
-        shader.unbind();
+        shader->unbind();
+
+        dst->flush();
     }
-    dst->flush();
 }
 
 void LLPipeline::gammaCorrect(LLRenderTarget* src, LLRenderTarget* dst)
 {
+    LL_PROFILE_GPU_ZONE("gamma correct");
     dst->bindTarget();
     // gamma correct lighting
     {
-        LL_PROFILE_GPU_ZONE("gamma correct");
-
         LLGLDepthTest depth(GL_FALSE, GL_FALSE);
 
         static LLCachedControl<bool> buildNoPost(gSavedSettings, "RenderDisablePostProcessing", false);
         static LLCachedControl<bool> should_auto_adjust(gSavedSettings, "RenderSkyAutoAdjustLegacy", false);
 
+        bool no_post = gSnapshotNoPost || (buildNoPost && gFloaterTools && gFloaterTools->isAvailable());
         LLSettingsSky::ptr_t psky = LLEnvironment::instance().getCurrentSky();
-        LLGLSLShader& shader = psky->getReflectionProbeAmbiance(should_auto_adjust) == 0.f ? gLegacyPostGammaCorrectProgram :
+        LLGLSLShader& shader = psky->getReflectionProbeAmbiance(should_auto_adjust) == 0.f && !no_post ? gLegacyPostGammaCorrectProgram :
             gDeferredPostGammaCorrectProgram;
 
         shader.bind();
@@ -7212,7 +7214,6 @@ void LLPipeline::gammaCorrect(LLRenderTarget* src, LLRenderTarget* dst)
 
 void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget* dst)
 {
-
     if (RenderScreenSpaceReflections && !gCubeSnapshot)
     {
         LL_PROFILE_GPU_ZONE("ssr copy");
@@ -7221,7 +7222,7 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
         LLRenderTarget& depth_src = mRT->deferredScreen;
 
         dst->bindTarget();
-        dst->clear();
+        dst->invalidate();
         gCopyDepthProgram.bind();
 
         S32 diff_map = gCopyDepthProgram.getTextureChannel(LLShaderMgr::DIFFUSE_MAP);
@@ -7239,9 +7240,9 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
 
 void LLPipeline::generateGlow(LLRenderTarget* src)
 {
+    LL_PROFILE_GPU_ZONE("glow generate");
     if (sRenderGlow)
     {
-        LL_PROFILE_GPU_ZONE("glow");
         mGlow[2].bindTarget();
         mGlow[2].clear();
 
@@ -7350,13 +7351,14 @@ void LLPipeline::generateGlow(LLRenderTarget* src)
 void LLPipeline::applyCAS(LLRenderTarget* src, LLRenderTarget* dst)
 {
     static LLCachedControl<F32> cas_sharpness(gSavedSettings, "RenderCASSharpness", 0.4f);
-    if (cas_sharpness == 0.0f || !gCASProgram.isComplete())
-    {
-        gPipeline.copyRenderTarget(src, dst);
-        return;
-    }
+    static LLCachedControl<bool> should_auto_adjust(gSavedSettings, "RenderSkyAutoAdjustLegacy", false);
+    static LLCachedControl<bool> buildNoPost(gSavedSettings, "RenderDisablePostProcessing", false);
 
-    LLGLSLShader* sharpen_shader = &gCASProgram;
+    LL_PROFILE_GPU_ZONE("cas");
+
+    bool no_post = gSnapshotNoPost || (buildNoPost && gFloaterTools && gFloaterTools->isAvailable());
+    LLSettingsSky::ptr_t psky = LLEnvironment::instance().getCurrentSky();
+    LLGLSLShader* sharpen_shader = psky->getReflectionProbeAmbiance(should_auto_adjust) == 0.f && !no_post ? &gCASLegacyGammaProgram : &gCASProgram;
 
     // Bind setup:
     dst->bindTarget();
@@ -7392,88 +7394,85 @@ void LLPipeline::applyCAS(LLRenderTarget* src, LLRenderTarget* dst)
     dst->flush();
 }
 
-void LLPipeline::applyFXAA(LLRenderTarget* src, LLRenderTarget* dst)
+void LLPipeline::applyFXAA(LLRenderTarget* src, LLRenderTarget* dst, bool combine_glow)
 {
+    llassert(!gCubeSnapshot);
+    LLGLSLShader* shader = &gGlowCombineProgram;
+
+    LL_PROFILE_GPU_ZONE("FXAA");
+    S32 width = src->getWidth();
+    S32 height = src->getHeight();
+
+    // bake out texture2D with RGBL for FXAA shader
+    mFXAAMap.bindTarget();
+    mFXAAMap.invalidate(GL_COLOR_BUFFER_BIT);
+
+    shader = combine_glow ? &gGlowCombineFXAAProgram : &gFXAALumaGenProgram;
+    shader->bind();
+
+    S32 channel = shader->enableTexture(LLShaderMgr::DEFERRED_DIFFUSE, src->getUsage());
+    if (channel > -1)
     {
-        llassert(!gCubeSnapshot);
-        bool multisample = RenderFSAAType == 1 && gFXAAProgram[0].isComplete() && mFXAAMap.isComplete();
+        src->bindTexture(0, channel, LLTexUnit::TFO_BILINEAR);
+    }
+    shader->bindTexture(LLShaderMgr::DEFERRED_EMISSIVE, &mGlow[1]);
 
-        // Present everything.
-        if (multisample)
-        {
-            LL_PROFILE_GPU_ZONE("aa");
-            S32 width = dst->getWidth();
-            S32 height = dst->getHeight();
+    {
+        LLGLDepthTest depth_test(GL_TRUE, GL_TRUE, GL_ALWAYS);
+        mScreenTriangleVB->setBuffer();
+        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+    }
 
-            // bake out texture2D with RGBL for FXAA shader
-            mFXAAMap.bindTarget();
-            mFXAAMap.clear(GL_COLOR_BUFFER_BIT);
+    shader->disableTexture(LLShaderMgr::DEFERRED_DIFFUSE, src->getUsage());
+    shader->unbind();
 
-            LLGLSLShader* shader = &gGlowCombineFXAAProgram;
-            shader->bind();
+    mFXAAMap.flush();
 
-            S32 channel = shader->enableTexture(LLShaderMgr::DEFERRED_DIFFUSE, src->getUsage());
-            if (channel > -1)
-            {
-                src->bindTexture(0, channel, LLTexUnit::TFO_BILINEAR);
-            }
+    if (dst)
+    {
+        dst->bindTarget();
+    }
 
-            {
-                LLGLDepthTest depth_test(GL_TRUE, GL_TRUE, GL_ALWAYS);
-                mScreenTriangleVB->setBuffer();
-                mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
-            }
+    static LLCachedControl<U32> aa_quality(gSavedSettings, "RenderFSAASamples", 0U);
+    U32 fsaa_quality = std::clamp(aa_quality(), 0U, 3U);
 
-            shader->disableTexture(LLShaderMgr::DEFERRED_DIFFUSE, src->getUsage());
-            shader->unbind();
+    shader = &gFXAAProgram[fsaa_quality];
+    shader->bind();
 
-            mFXAAMap.flush();
+    channel = shader->enableTexture(LLShaderMgr::DIFFUSE_MAP, mFXAAMap.getUsage());
+    if (channel > -1)
+    {
+        mFXAAMap.bindTexture(0, channel, LLTexUnit::TFO_BILINEAR);
+    }
 
-            dst->bindTarget();
+    gGLViewport[0] = gViewerWindow->getWorldViewRectRaw().mLeft;
+    gGLViewport[1] = gViewerWindow->getWorldViewRectRaw().mBottom;
+    gGLViewport[2] = gViewerWindow->getWorldViewRectRaw().getWidth();
+    gGLViewport[3] = gViewerWindow->getWorldViewRectRaw().getHeight();
 
-            static LLCachedControl<U32> aa_quality(gSavedSettings, "RenderFSAASamples", 0U);
-            U32 fsaa_quality = std::clamp(aa_quality(), 0U, 3U);
+    glViewport(gGLViewport[0], gGLViewport[1], gGLViewport[2], gGLViewport[3]);
 
-            shader = &gFXAAProgram[fsaa_quality];
-            shader->bind();
+    F32 scale_x = (F32)width / mFXAAMap.getWidth();
+    F32 scale_y = (F32)height / mFXAAMap.getHeight();
+    shader->uniform2f(LLShaderMgr::FXAA_TC_SCALE, scale_x, scale_y);
+    shader->uniform2f(LLShaderMgr::FXAA_RCP_SCREEN_RES, 1.f / width * scale_x, 1.f / height * scale_y);
+    shader->uniform4f(LLShaderMgr::FXAA_RCP_FRAME_OPT, -0.5f / width * scale_x, -0.5f / height * scale_y,
+        0.5f / width * scale_x, 0.5f / height * scale_y);
+    shader->uniform4f(LLShaderMgr::FXAA_RCP_FRAME_OPT2, -2.f / width * scale_x, -2.f / height * scale_y,
+        2.f / width * scale_x, 2.f / height * scale_y);
 
-            channel = shader->enableTexture(LLShaderMgr::DIFFUSE_MAP, mFXAAMap.getUsage());
-            if (channel > -1)
-            {
-                mFXAAMap.bindTexture(0, channel, LLTexUnit::TFO_BILINEAR);
-            }
+    {
+        LLGLDepthTest depth_test(GL_TRUE, GL_TRUE, GL_ALWAYS);
+        shader->bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mRT->deferredScreen, true);
 
-            gGLViewport[0] = gViewerWindow->getWorldViewRectRaw().mLeft;
-            gGLViewport[1] = gViewerWindow->getWorldViewRectRaw().mBottom;
-            gGLViewport[2] = gViewerWindow->getWorldViewRectRaw().getWidth();
-            gGLViewport[3] = gViewerWindow->getWorldViewRectRaw().getHeight();
+        mScreenTriangleVB->setBuffer();
+        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+    }
 
-            glViewport(gGLViewport[0], gGLViewport[1], gGLViewport[2], gGLViewport[3]);
-
-            F32 scale_x = (F32)width / mFXAAMap.getWidth();
-            F32 scale_y = (F32)height / mFXAAMap.getHeight();
-            shader->uniform2f(LLShaderMgr::FXAA_TC_SCALE, scale_x, scale_y);
-            shader->uniform2f(LLShaderMgr::FXAA_RCP_SCREEN_RES, 1.f / width * scale_x, 1.f / height * scale_y);
-            shader->uniform4f(LLShaderMgr::FXAA_RCP_FRAME_OPT, -0.5f / width * scale_x, -0.5f / height * scale_y,
-                0.5f / width * scale_x, 0.5f / height * scale_y);
-            shader->uniform4f(LLShaderMgr::FXAA_RCP_FRAME_OPT2, -2.f / width * scale_x, -2.f / height * scale_y,
-                2.f / width * scale_x, 2.f / height * scale_y);
-
-            {
-                LLGLDepthTest depth_test(GL_TRUE, GL_TRUE, GL_ALWAYS);
-                S32 depth_channel = shader->getTextureChannel(LLShaderMgr::DEFERRED_DEPTH);
-                gGL.getTexUnit(depth_channel)->bind(&mRT->deferredScreen, true);
-
-                mScreenTriangleVB->setBuffer();
-                mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
-            }
-
-            shader->unbind();
-            dst->flush();
-        }
-        else {
-            copyRenderTarget(src, dst);
-        }
+    shader->unbind();
+    if (dst)
+    {
+        dst->flush();
     }
 }
 
@@ -7485,7 +7484,7 @@ void LLPipeline::generateSMAABuffers(LLRenderTarget* src)
     // Present everything.
     if (multisample)
     {
-        LL_PROFILE_GPU_ZONE("aa");
+        LL_PROFILE_GPU_ZONE("SMAA Edge");
         static LLCachedControl<U32> aa_quality(gSavedSettings, "RenderFSAASamples", 0U);
         U32 fsaa_quality = std::clamp(aa_quality(), 0U, 3U);
 
@@ -7506,6 +7505,7 @@ void LLPipeline::generateSMAABuffers(LLRenderTarget* src)
             LLGLSLShader& edge_shader = gSMAAEdgeDetectProgram[fsaa_quality];
 
             dest.bindTarget();
+            // SMAA utilizes discard, so the background color matters
             dest.clear(GL_COLOR_BUFFER_BIT);
 
             edge_shader.bind();
@@ -7549,7 +7549,7 @@ void LLPipeline::generateSMAABuffers(LLRenderTarget* src)
             LLGLSLShader& blend_weights_shader = gSMAABlendWeightsProgram[fsaa_quality];
 
             dest.bindTarget();
-            dest.clear(GL_COLOR_BUFFER_BIT);
+            dest.invalidate(GL_COLOR_BUFFER_BIT);
 
             blend_weights_shader.bind();
             blend_weights_shader.uniform4fv(sSmaaRTMetrics, 1, rt_metrics);
@@ -7595,72 +7595,73 @@ void LLPipeline::generateSMAABuffers(LLRenderTarget* src)
     }
 }
 
-void LLPipeline::applySMAA(LLRenderTarget* src, LLRenderTarget* dst)
+void LLPipeline::applySMAA(LLRenderTarget* src, LLRenderTarget* dst, bool combine_glow)
 {
     llassert(!gCubeSnapshot);
-    bool multisample = RenderFSAAType == 2 && gSMAAEdgeDetectProgram[0].isComplete() && mFXAAMap.isComplete() && mSMAABlendBuffer.isComplete();
 
-    // Present everything.
-    if (multisample)
+    LL_PROFILE_GPU_ZONE("SMAA");
+    static LLCachedControl<U32> aa_quality(gSavedSettings, "RenderFSAASamples", 0U);
+    U32 fsaa_quality = std::clamp(aa_quality(), 0U, 3U);
+
+    S32 width = src->getWidth();
+    S32 height = src->getHeight();
+
+    float rt_metrics[] = { 1.f / width, 1.f / height, (float)width, (float)height };
+
+    LLGLDepthTest    depth(GL_FALSE, GL_FALSE);
+
+    static LLCachedControl<bool> use_sample(gSavedSettings, "RenderSMAAUseSample", false);
+    //static LLCachedControl<bool> use_stencil(gSavedSettings, "RenderSMAAUseStencil", true);
+
     {
-        LL_PROFILE_GPU_ZONE("aa");
-        static LLCachedControl<U32> aa_quality(gSavedSettings, "RenderFSAASamples", 0U);
-        U32 fsaa_quality = std::clamp(aa_quality(), 0U, 3U);
+        //LLGLDisable stencil(GL_STENCIL_TEST);
 
-        S32 width = src->getWidth();
-        S32 height = src->getHeight();
+        // Bind setup:
+        LLGLSLShader& blend_shader = combine_glow ? gSMAANeighborhoodBlendGlowCombineProgram[fsaa_quality]
+            : gSMAANeighborhoodBlendProgram[fsaa_quality];
 
-        float rt_metrics[] = { 1.f / width, 1.f / height, (float)width, (float)height };
-
-        LLGLDepthTest    depth(GL_FALSE, GL_FALSE);
-
-        static LLCachedControl<bool> use_sample(gSavedSettings, "RenderSMAAUseSample", false);
-        //static LLCachedControl<bool> use_stencil(gSavedSettings, "RenderSMAAUseStencil", true);
-
+        if(dst)
         {
-            //LLGLDisable stencil(GL_STENCIL_TEST);
-
-            // Bind setup:
-            LLRenderTarget* bound_target = dst;
-            LLGLSLShader& blend_shader = gSMAANeighborhoodBlendProgram[fsaa_quality];
-
-            bound_target->bindTarget();
-            bound_target->clear(GL_COLOR_BUFFER_BIT);
-
-            blend_shader.bind();
-            blend_shader.uniform4fv(sSmaaRTMetrics, 1, rt_metrics);
-
-            S32 diffuse_channel = blend_shader.enableTexture(LLShaderMgr::DEFERRED_DIFFUSE);
-            if(diffuse_channel > -1)
-            {
-                src->bindTexture(0, diffuse_channel, LLTexUnit::TFO_BILINEAR);
-                gGL.getTexUnit(diffuse_channel)->setTextureAddressMode(LLTexUnit::TAM_CLAMP);
-            }
-
-            S32 blend_channel = blend_shader.enableTexture(LLShaderMgr::SMAA_BLEND_TEX);
-            if (blend_channel > -1)
-            {
-                mSMAABlendBuffer.bindTexture(0, blend_channel, LLTexUnit::TFO_BILINEAR);
-            }
-
-            mScreenTriangleVB->setBuffer();
-            mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
-
-            bound_target->flush();
-            blend_shader.unbind();
-            gGL.getTexUnit(diffuse_channel)->unbindFast(LLTexUnit::TT_TEXTURE);
-            gGL.getTexUnit(blend_channel)->unbindFast(LLTexUnit::TT_TEXTURE);
+            dst->bindTarget();
+            dst->invalidate(GL_COLOR_BUFFER_BIT);
         }
-    }
-    else
-    {
-        copyRenderTarget(src, dst);
+
+        blend_shader.bind();
+        blend_shader.uniform4fv(sSmaaRTMetrics, 1, rt_metrics);
+
+        S32 diffuse_channel = blend_shader.enableTexture(LLShaderMgr::DEFERRED_DIFFUSE);
+        if(diffuse_channel > -1)
+        {
+            src->bindTexture(0, diffuse_channel, LLTexUnit::TFO_BILINEAR);
+            gGL.getTexUnit(diffuse_channel)->setTextureAddressMode(LLTexUnit::TAM_CLAMP);
+        }
+
+        S32 blend_channel = blend_shader.enableTexture(LLShaderMgr::SMAA_BLEND_TEX);
+        if (blend_channel > -1)
+        {
+            mSMAABlendBuffer.bindTexture(0, blend_channel, LLTexUnit::TFO_BILINEAR);
+        }
+
+        blend_shader.bindTexture(LLShaderMgr::DEFERRED_EMISSIVE, &mGlow[1]);
+
+        blend_shader.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mRT->deferredScreen, true);
+
+        mScreenTriangleVB->setBuffer();
+        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+
+        blend_shader.unbind();
+        gGL.getTexUnit(diffuse_channel)->unbindFast(LLTexUnit::TT_TEXTURE);
+        gGL.getTexUnit(blend_channel)->unbindFast(LLTexUnit::TT_TEXTURE);
+
+        if (dst)
+        {
+            dst->flush();
+        }
     }
 }
 
 void LLPipeline::copyRenderTarget(LLRenderTarget* src, LLRenderTarget* dst)
 {
-
     LL_PROFILE_GPU_ZONE("copyRenderTarget");
     dst->bindTarget();
 
@@ -7681,220 +7682,221 @@ void LLPipeline::copyRenderTarget(LLRenderTarget* src, LLRenderTarget* dst)
 
 void LLPipeline::combineGlow(LLRenderTarget* src, LLRenderTarget* dst)
 {
-    // Go ahead and do our glow combine here in our destination.  We blit this later into the front buffer.
+    LL_PROFILE_GPU_ZONE("glow combine");
 
-    dst->bindTarget();
+    // Go ahead and do our glow combine here in our destination.  We blit this later into the front buffer.
+    if (dst)
+    {
+        dst->bindTarget();
+    }
 
     {
-
         gGlowCombineProgram.bind();
 
         gGlowCombineProgram.bindTexture(LLShaderMgr::DEFERRED_DIFFUSE, src);
         gGlowCombineProgram.bindTexture(LLShaderMgr::DEFERRED_EMISSIVE, &mGlow[1]);
+        gGlowCombineProgram.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mRT->deferredScreen, true);
 
         mScreenTriangleVB->setBuffer();
         mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
     }
 
-    dst->flush();
+    if (dst)
+    {
+        dst->flush();
+    }
 }
 
 void LLPipeline::renderDoF(LLRenderTarget* src, LLRenderTarget* dst)
 {
-    {
-        bool dof_enabled =
-            (RenderDepthOfFieldInEditMode || !LLToolMgr::getInstance()->inBuildMode()) &&
-            RenderDepthOfField &&
-            !gCubeSnapshot;
+    LL_PROFILE_GPU_ZONE("dof");
+    gViewerWindow->setup3DViewport();
 
-        gViewerWindow->setup3DViewport();
+    LLGLDisable blend(GL_BLEND);
 
-        if (dof_enabled)
+    // depth of field focal plane calculations
+    static F32 current_distance = 16.f;
+    static F32 start_distance = 16.f;
+    static F32 transition_time = 1.f;
+
+    LLVector3 focus_point;
+
+    LLViewerObject* obj = LLViewerMediaFocus::getInstance()->getFocusedObject();
+    if (obj && obj->mDrawable && obj->isSelected())
+    { // focus on selected media object
+        S32 face_idx = LLViewerMediaFocus::getInstance()->getFocusedFace();
+        if (obj && obj->mDrawable)
         {
-            LL_PROFILE_GPU_ZONE("dof");
-            LLGLDisable blend(GL_BLEND);
-
-            // depth of field focal plane calculations
-            static F32 current_distance = 16.f;
-            static F32 start_distance = 16.f;
-            static F32 transition_time = 1.f;
-
-            LLVector3 focus_point;
-
-            LLViewerObject* obj = LLViewerMediaFocus::getInstance()->getFocusedObject();
-            if (obj && obj->mDrawable && obj->isSelected())
-            { // focus on selected media object
-                S32 face_idx = LLViewerMediaFocus::getInstance()->getFocusedFace();
-                if (obj && obj->mDrawable)
-                {
-                    LLFace* face = obj->mDrawable->getFace(face_idx);
-                    if (face)
-                    {
-                        focus_point = face->getPositionAgent();
-                    }
-                }
-            }
-
-            if (focus_point.isExactlyZero())
+            LLFace* face = obj->mDrawable->getFace(face_idx);
+            if (face)
             {
-                if (LLViewerJoystick::getInstance()->getOverrideCamera())
-                { // focus on point under cursor
-                    focus_point.set(gDebugRaycastIntersection.getF32ptr());
-                }
-                else if (gAgentCamera.cameraMouselook())
-                { // focus on point under mouselook crosshairs
-                    LLVector4a result;
-                    result.clear();
-
-                    gViewerWindow->cursorIntersect(-1, -1, 512.f, nullptr, -1, false, false, true, true, nullptr, nullptr, nullptr, &result);
-
-                    focus_point.set(result.getF32ptr());
-                }
-                else
-                {
-                    // focus on alt-zoom target
-                    LLViewerRegion* region = gAgent.getRegion();
-                    if (region)
-                    {
-                        focus_point = LLVector3(gAgentCamera.getFocusGlobal() - region->getOriginGlobal());
-                    }
-                }
+                focus_point = face->getPositionAgent();
             }
+        }
+    }
 
-            LLVector3 eye = LLViewerCamera::getInstance()->getOrigin();
-            F32 target_distance = 16.f;
-            if (!focus_point.isExactlyZero())
-            {
-                target_distance = LLViewerCamera::getInstance()->getAtAxis() * (focus_point - eye);
-            }
+    if (focus_point.isExactlyZero())
+    {
+        if (LLViewerJoystick::getInstance()->getOverrideCamera())
+        { // focus on point under cursor
+            focus_point.set(gDebugRaycastIntersection.getF32ptr());
+        }
+        else if (gAgentCamera.cameraMouselook())
+        { // focus on point under mouselook crosshairs
+            LLVector4a result;
+            result.clear();
 
-            if (transition_time >= 1.f && fabsf(current_distance - target_distance) / current_distance > 0.01f)
-            { // large shift happened, interpolate smoothly to new target distance
-                transition_time = 0.f;
-                start_distance = current_distance;
-            }
-            else if (transition_time < 1.f)
-            { // currently in a transition, continue interpolating
-                transition_time += 1.f / CameraFocusTransitionTime * gFrameIntervalSeconds.value();
-                transition_time = llmin(transition_time, 1.f);
+            gViewerWindow->cursorIntersect(-1, -1, 512.f, nullptr, -1, false, false, true, true, nullptr, nullptr, nullptr, &result);
 
-                F32 t = cosf(transition_time * F_PI + F_PI) * 0.5f + 0.5f;
-                current_distance = start_distance + (target_distance - start_distance) * t;
-            }
-            else
-            { // small or no change, just snap to target distance
-                current_distance = target_distance;
-            }
-
-            // convert to mm
-            F32 subject_distance = current_distance * 1000.f;
-            F32 fnumber = CameraFNumber;
-            F32 default_focal_length = CameraFocalLength;
-
-            F32 fov = LLViewerCamera::getInstance()->getView();
-
-            const F32 default_fov = CameraFieldOfView * F_PI / 180.f;
-
-            // F32 aspect_ratio = (F32) mRT->screen.getWidth()/(F32)mRT->screen.getHeight();
-
-            F32 dv = 2.f * default_focal_length * tanf(default_fov / 2.f);
-
-            F32 focal_length = dv / (2 * tanf(fov / 2.f));
-
-            // F32 tan_pixel_angle = tanf(LLDrawable::sCurPixelAngle);
-
-            // from wikipedia -- c = |s2-s1|/s2 * f^2/(N(S1-f))
-            // where     N = fnumber
-            //           s2 = dot distance
-            //           s1 = subject distance
-            //           f = focal length
-            //
-
-            F32 blur_constant = focal_length * focal_length / (fnumber * (subject_distance - focal_length));
-            blur_constant /= 1000.f; // convert to meters for shader
-            F32 magnification = focal_length / (subject_distance - focal_length);
-
-            { // build diffuse+bloom+CoF
-                mRT->deferredLight.bindTarget();
-
-                gDeferredCoFProgram.bind();
-
-                gDeferredCoFProgram.bindTexture(LLShaderMgr::DEFERRED_DIFFUSE, src, LLTexUnit::TFO_POINT);
-                gDeferredCoFProgram.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mRT->deferredScreen, true);
-
-                gDeferredCoFProgram.uniform1f(LLShaderMgr::DEFERRED_DEPTH_CUTOFF, RenderEdgeDepthCutoff);
-                gDeferredCoFProgram.uniform1f(LLShaderMgr::DEFERRED_NORM_CUTOFF, RenderEdgeNormCutoff);
-                gDeferredCoFProgram.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES, (GLfloat)dst->getWidth(), (GLfloat)dst->getHeight());
-                gDeferredCoFProgram.uniform1f(LLShaderMgr::DOF_FOCAL_DISTANCE, -subject_distance / 1000.f);
-                gDeferredCoFProgram.uniform1f(LLShaderMgr::DOF_BLUR_CONSTANT, blur_constant);
-                gDeferredCoFProgram.uniform1f(LLShaderMgr::DOF_TAN_PIXEL_ANGLE, tanf(1.f / LLDrawable::sCurPixelAngle));
-                gDeferredCoFProgram.uniform1f(LLShaderMgr::DOF_MAGNIFICATION, magnification);
-                gDeferredCoFProgram.uniform1f(LLShaderMgr::DOF_MAX_COF, CameraMaxCoF);
-                gDeferredCoFProgram.uniform1f(LLShaderMgr::DOF_RES_SCALE, CameraDoFResScale);
-
-                mScreenTriangleVB->setBuffer();
-                mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
-                gDeferredCoFProgram.unbind();
-                mRT->deferredLight.flush();
-            }
-
-            U32 dof_width = (U32)(mRT->screen.getWidth() * CameraDoFResScale);
-            U32 dof_height = (U32)(mRT->screen.getHeight() * CameraDoFResScale);
-
-            { // perform DoF sampling at half-res (preserve alpha channel)
-                src->bindTarget();
-                glViewport(0, 0, dof_width, dof_height);
-
-                gGL.setColorMask(true, false);
-
-                gDeferredPostProgram.bind();
-                gDeferredPostProgram.bindTexture(LLShaderMgr::DEFERRED_DIFFUSE, &mRT->deferredLight, LLTexUnit::TFO_POINT);
-
-                gDeferredPostProgram.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES, (GLfloat)dst->getWidth(), (GLfloat)dst->getHeight());
-                gDeferredPostProgram.uniform1f(LLShaderMgr::DOF_MAX_COF, CameraMaxCoF);
-                gDeferredPostProgram.uniform1f(LLShaderMgr::DOF_RES_SCALE, CameraDoFResScale);
-
-                mScreenTriangleVB->setBuffer();
-                mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
-
-                gDeferredPostProgram.unbind();
-
-                src->flush();
-                gGL.setColorMask(true, true);
-            }
-
-            { // combine result based on alpha
-
-                dst->bindTarget();
-                glViewport(0, 0, dst->getWidth(), dst->getHeight());
-
-                gDeferredDoFCombineProgram.bind();
-                gDeferredDoFCombineProgram.bindTexture(LLShaderMgr::DEFERRED_DIFFUSE, src, LLTexUnit::TFO_POINT);
-                gDeferredDoFCombineProgram.bindTexture(LLShaderMgr::DEFERRED_LIGHT, &mRT->deferredLight, LLTexUnit::TFO_POINT);
-
-                gDeferredDoFCombineProgram.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES, (GLfloat)dst->getWidth(), (GLfloat)dst->getHeight());
-                gDeferredDoFCombineProgram.uniform1f(LLShaderMgr::DOF_MAX_COF, CameraMaxCoF);
-                gDeferredDoFCombineProgram.uniform1f(LLShaderMgr::DOF_RES_SCALE, CameraDoFResScale);
-                gDeferredDoFCombineProgram.uniform1f(LLShaderMgr::DOF_WIDTH, (dof_width - 1) / (F32)src->getWidth());
-                gDeferredDoFCombineProgram.uniform1f(LLShaderMgr::DOF_HEIGHT, (dof_height - 1) / (F32)src->getHeight());
-
-                mScreenTriangleVB->setBuffer();
-                mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
-
-                gDeferredDoFCombineProgram.unbind();
-
-                dst->flush();
-            }
+            focus_point.set(result.getF32ptr());
         }
         else
         {
-            copyRenderTarget(src, dst);
+            // focus on alt-zoom target
+            LLViewerRegion* region = gAgent.getRegion();
+            if (region)
+            {
+                focus_point = LLVector3(gAgentCamera.getFocusGlobal() - region->getOriginGlobal());
+            }
+        }
+    }
+
+    LLVector3 eye = LLViewerCamera::getInstance()->getOrigin();
+    F32 target_distance = 16.f;
+    if (!focus_point.isExactlyZero())
+    {
+        target_distance = LLViewerCamera::getInstance()->getAtAxis() * (focus_point - eye);
+    }
+
+    if (transition_time >= 1.f && fabsf(current_distance - target_distance) / current_distance > 0.01f)
+    { // large shift happened, interpolate smoothly to new target distance
+        transition_time = 0.f;
+        start_distance = current_distance;
+    }
+    else if (transition_time < 1.f)
+    { // currently in a transition, continue interpolating
+        transition_time += 1.f / CameraFocusTransitionTime * gFrameIntervalSeconds.value();
+        transition_time = llmin(transition_time, 1.f);
+
+        F32 t = cosf(transition_time * F_PI + F_PI) * 0.5f + 0.5f;
+        current_distance = start_distance + (target_distance - start_distance) * t;
+    }
+    else
+    { // small or no change, just snap to target distance
+        current_distance = target_distance;
+    }
+
+    // convert to mm
+    F32 subject_distance = current_distance * 1000.f;
+    F32 fnumber = CameraFNumber;
+    F32 default_focal_length = CameraFocalLength;
+
+    F32 fov = LLViewerCamera::getInstance()->getView();
+
+    const F32 default_fov = CameraFieldOfView * F_PI / 180.f;
+
+    // F32 aspect_ratio = (F32) mRT->screen.getWidth()/(F32)mRT->screen.getHeight();
+
+    F32 dv = 2.f * default_focal_length * tanf(default_fov / 2.f);
+
+    F32 focal_length = dv / (2 * tanf(fov / 2.f));
+
+    // F32 tan_pixel_angle = tanf(LLDrawable::sCurPixelAngle);
+
+    // from wikipedia -- c = |s2-s1|/s2 * f^2/(N(S1-f))
+    // where     N = fnumber
+    //           s2 = dot distance
+    //           s1 = subject distance
+    //           f = focal length
+    //
+
+    F32 blur_constant = focal_length * focal_length / (fnumber * (subject_distance - focal_length));
+    blur_constant /= 1000.f; // convert to meters for shader
+    F32 magnification = focal_length / (subject_distance - focal_length);
+
+    { // build diffuse+bloom+CoF
+        mFXAAMap.bindTarget();
+
+        gDeferredCoFProgram.bind();
+
+        gDeferredCoFProgram.bindTexture(LLShaderMgr::DEFERRED_DIFFUSE, src, LLTexUnit::TFO_POINT);
+        gDeferredCoFProgram.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mRT->deferredScreen, true);
+
+        gDeferredCoFProgram.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES, (GLfloat)mFXAAMap.getWidth(), (GLfloat)mFXAAMap.getHeight());
+        gDeferredCoFProgram.uniform1f(LLShaderMgr::DOF_FOCAL_DISTANCE, -subject_distance / 1000.f);
+        gDeferredCoFProgram.uniform1f(LLShaderMgr::DOF_BLUR_CONSTANT, blur_constant);
+        gDeferredCoFProgram.uniform1f(LLShaderMgr::DOF_TAN_PIXEL_ANGLE, tanf(1.f / LLDrawable::sCurPixelAngle));
+        gDeferredCoFProgram.uniform1f(LLShaderMgr::DOF_MAGNIFICATION, magnification);
+        gDeferredCoFProgram.uniform1f(LLShaderMgr::DOF_MAX_COF, CameraMaxCoF);
+        gDeferredCoFProgram.uniform1f(LLShaderMgr::DOF_RES_SCALE, CameraDoFResScale);
+        gDeferredCoFProgram.bindTexture(LLShaderMgr::DEFERRED_EMISSIVE, &mGlow[1]);
+
+        mScreenTriangleVB->setBuffer();
+        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+        gDeferredCoFProgram.unbind();
+        mFXAAMap.flush();
+    }
+
+    U32 dof_width = (U32)(mRT->screen.getWidth() * CameraDoFResScale);
+    U32 dof_height = (U32)(mRT->screen.getHeight() * CameraDoFResScale);
+
+    { // perform DoF sampling at half-res (preserve alpha channel)
+        src->bindTarget();
+        glViewport(0, 0, dof_width, dof_height);
+
+        gGL.setColorMask(true, false);
+
+        gDeferredPostProgram.bind();
+        gDeferredPostProgram.bindTexture(LLShaderMgr::DEFERRED_DIFFUSE, &mFXAAMap, LLTexUnit::TFO_POINT);
+
+        gDeferredPostProgram.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES, (GLfloat)src->getWidth(), (GLfloat)src->getHeight());
+        gDeferredPostProgram.uniform1f(LLShaderMgr::DOF_MAX_COF, CameraMaxCoF);
+        gDeferredPostProgram.uniform1f(LLShaderMgr::DOF_RES_SCALE, CameraDoFResScale);
+
+        mScreenTriangleVB->setBuffer();
+        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+
+        gDeferredPostProgram.unbind();
+
+        src->flush();
+        gGL.setColorMask(true, true);
+    }
+
+    { // combine result based on alpha
+
+        if(dst)
+        {
+            dst->bindTarget();
+        }
+        glViewport(0, 0, mFXAAMap.getWidth(), mFXAAMap.getHeight());
+
+        gDeferredDoFCombineProgram.bind();
+        gDeferredDoFCombineProgram.bindTexture(LLShaderMgr::DEFERRED_DIFFUSE, src, LLTexUnit::TFO_POINT);
+        gDeferredDoFCombineProgram.bindTexture(LLShaderMgr::DEFERRED_LIGHT, &mFXAAMap, LLTexUnit::TFO_POINT);
+        gDeferredDoFCombineProgram.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mRT->deferredScreen, true);
+
+        gDeferredDoFCombineProgram.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES, (GLfloat)src->getWidth(), (GLfloat)src->getHeight());
+        gDeferredDoFCombineProgram.uniform1f(LLShaderMgr::DOF_MAX_COF, CameraMaxCoF);
+        gDeferredDoFCombineProgram.uniform1f(LLShaderMgr::DOF_RES_SCALE, CameraDoFResScale);
+        gDeferredDoFCombineProgram.uniform1f(LLShaderMgr::DOF_WIDTH, (dof_width - 1) / (F32)src->getWidth());
+        gDeferredDoFCombineProgram.uniform1f(LLShaderMgr::DOF_HEIGHT, (dof_height - 1) / (F32)src->getHeight());
+
+        mScreenTriangleVB->setBuffer();
+        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+
+        gDeferredDoFCombineProgram.unbind();
+
+        if (dst)
+        {
+            dst->flush();
         }
     }
 }
 
 void LLPipeline::renderFinalize()
 {
+    // Ensure changes here are propogated to relevant portions of LLGLTFPreviewTexture::render()
+
     llassert(!gCubeSnapshot);
     LLVertexBuffer::unbind();
     LLGLState::checkStates();
@@ -7914,9 +7916,8 @@ void LLPipeline::renderFinalize()
     gGL.setColorMask(true, true);
     glClearColor(0, 0, 0, 0);
 
-    static LLCachedControl<bool> has_hdr(gSavedSettings, "RenderHDREnabled", true);
-    bool hdr = gGLManager.mGLVersion > 4.05f && has_hdr();
-
+    static LLCachedControl<bool> render_hdr(gSavedSettings, "RenderHDREnabled", true);
+    bool hdr = gGLManager.mGLVersion > 4.05f && render_hdr;
     if (hdr)
     {
         copyScreenSpaceReflections(&mRT->screen, &mSceneMap);
@@ -7925,22 +7926,29 @@ void LLPipeline::renderFinalize()
 
         generateExposure(&mLuminanceMap, &mExposureMap);
 
-        tonemap(&mRT->screen, &mPostMap);
+        static LLCachedControl<bool> render_cas(gSavedSettings, "RenderCAS", true);
+        if (render_cas && gCASProgram.isComplete())
+        {
+            tonemap(&mRT->screen, &mRT->deferredLight, false); // Must output to 16F buffer when passing to CAS or banding occurs
 
-        applyCAS(&mPostMap, &mRT->screen);
+            applyCAS(&mRT->deferredLight, &mPostPingMap); // Gamma corrects after sharpening
+        }
+        else
+        {
+            tonemap(&mRT->screen, &mPostPingMap);
+        }
+        }
+    else
+    {
+        gammaCorrect(&mRT->screen, &mPostPingMap);
     }
 
-    generateSMAABuffers(&mRT->screen);
-
-    gammaCorrect(&mRT->screen, &mPostMap);
+    LLRenderTarget* src = &mPostPingMap;
+    LLRenderTarget* dest = &mPostPongMap;
 
     LLVertexBuffer::unbind();
 
-    applySMAA(&mPostMap, &mRT->screen);
-
-    generateGlow(&mRT->screen);
-
-    combineGlow(&mRT->screen, &mPostMap);
+    generateGlow(src);
 
     gGLViewport[0] = gViewerWindow->getWorldViewRectRaw().mLeft;
     gGLViewport[1] = gViewerWindow->getWorldViewRectRaw().mBottom;
@@ -7948,13 +7956,30 @@ void LLPipeline::renderFinalize()
     gGLViewport[3] = gViewerWindow->getWorldViewRectRaw().getHeight();
     glViewport(gGLViewport[0], gGLViewport[1], gGLViewport[2], gGLViewport[3]);
 
-    renderDoF(&mPostMap, &mRT->screen);
-
-    LLRenderTarget* finalBuffer = &mRT->screen;
-    if (RenderFSAAType == 1)
+    bool smaa_enabled = RenderFSAAType == 2 && mFXAAMap.isComplete() && mSMAABlendBuffer.isComplete();
+    bool fxaa_enabled = RenderFSAAType == 1 && mFXAAMap.isComplete();
+    bool dof_enabled = RenderDepthOfField &&
+        (RenderDepthOfFieldInEditMode || !LLToolMgr::getInstance()->inBuildMode());
+    if(dof_enabled) // DoF Combines Glow
     {
-        applyFXAA(&mRT->screen, &mPostMap);
-        finalBuffer = &mPostMap;
+        LLRenderTarget* dof_dest = (smaa_enabled || fxaa_enabled) ? dest : nullptr; // render to screen if no AA enabled
+        renderDoF(src, dof_dest);
+        std::swap(src, dof_dest);
+    }
+
+    // Render to screen
+    if (smaa_enabled)
+    {
+        generateSMAABuffers(src);
+        applySMAA(src, nullptr, !dof_enabled);
+    }
+    else if (fxaa_enabled)
+    {
+        applyFXAA(src, nullptr, !dof_enabled);
+    }
+    else if (!dof_enabled)
+    {
+        combineGlow(src, nullptr);
     }
 
     if (RenderBufferVisualization > -1)
@@ -7965,16 +7990,16 @@ void LLPipeline::renderFinalize()
         case 1:
         case 2:
         case 3:
-            visualizeBuffers(&mRT->deferredScreen, finalBuffer, RenderBufferVisualization);
+            visualizeBuffers(&mRT->deferredScreen, nullptr, RenderBufferVisualization);
             break;
         case 4:
-            visualizeBuffers(&mLuminanceMap, finalBuffer, 0);
+            visualizeBuffers(&mLuminanceMap, nullptr, 0);
             break;
         case 5:
         {
             if (RenderFSAAType > 0)
             {
-                visualizeBuffers(&mFXAAMap, finalBuffer, 0);
+                visualizeBuffers(&mFXAAMap, nullptr, 0);
             }
             break;
         }
@@ -7982,7 +8007,7 @@ void LLPipeline::renderFinalize()
         {
             if (RenderFSAAType == 2)
             {
-                visualizeBuffers(&mSMAABlendBuffer, finalBuffer, 0);
+                visualizeBuffers(&mSMAABlendBuffer, nullptr, 0);
             }
             break;
         }
@@ -7990,24 +8015,6 @@ void LLPipeline::renderFinalize()
             break;
         }
     }
-
-    // Present the screen target.
-
-    gDeferredPostNoDoFNoiseProgram.bind(); // Add noise as part of final render to screen pass to avoid damaging other post effects
-
-    // Whatever is last in the above post processing chain should _always_ be rendered directly here.  If not, expect problems.
-    gDeferredPostNoDoFNoiseProgram.bindTexture(LLShaderMgr::DEFERRED_DIFFUSE, finalBuffer);
-    gDeferredPostNoDoFNoiseProgram.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mRT->deferredScreen, true);
-
-    gDeferredPostNoDoFNoiseProgram.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES, (GLfloat)finalBuffer->getWidth(), (GLfloat)finalBuffer->getHeight());
-
-    {
-        LLGLDepthTest depth_test(GL_TRUE, GL_TRUE, GL_ALWAYS);
-        mScreenTriangleVB->setBuffer();
-        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
-    }
-
-    gDeferredPostNoDoFNoiseProgram.unbind();
 
     gGL.setSceneBlendType(LLRender::BT_ALPHA);
 
@@ -8141,30 +8148,9 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
         stop_glerror();
     }
 
-    channel = shader.enableTexture(LLShaderMgr::EXPOSURE_MAP);
-    if (channel > -1)
-    {
-        gGL.getTexUnit(channel)->bind(&mExposureMap);
-    }
-
-    if (shader.getUniformLocation(LLShaderMgr::VIEWPORT) != -1)
-    {
-        shader.uniform4f(LLShaderMgr::VIEWPORT, (F32) gGLViewport[0],
-                                    (F32) gGLViewport[1],
-                                    (F32) gGLViewport[2],
-                                    (F32) gGLViewport[3]);
-    }
-
     if (sReflectionRender && !shader.getUniformLocation(LLShaderMgr::MODELVIEW_MATRIX))
     {
         shader.uniformMatrix4fv(LLShaderMgr::MODELVIEW_MATRIX, 1, false, glm::value_ptr(mReflectionModelView));
-    }
-
-    channel = shader.enableTexture(LLShaderMgr::DEFERRED_NOISE);
-    if (channel > -1)
-    {
-        gGL.getTexUnit(channel)->bindManual(LLTexUnit::TT_TEXTURE, mNoiseMap);
-        gGL.getTexUnit(channel)->setTextureFilteringOption(LLTexUnit::TFO_POINT);
     }
 
     bindLightFunc(shader);
@@ -8230,34 +8216,6 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
 
     bindReflectionProbes(shader);
 
-    if (gAtmosphere)
-    {
-        // bind precomputed textures necessary for calculating sun and sky luminance
-        channel = shader.enableTexture(LLShaderMgr::TRANSMITTANCE_TEX, LLTexUnit::TT_TEXTURE);
-        if (channel > -1)
-        {
-            shader.bindTexture(LLShaderMgr::TRANSMITTANCE_TEX, gAtmosphere->getTransmittance());
-        }
-
-        channel = shader.enableTexture(LLShaderMgr::SCATTER_TEX, LLTexUnit::TT_TEXTURE_3D);
-        if (channel > -1)
-        {
-            shader.bindTexture(LLShaderMgr::SCATTER_TEX, gAtmosphere->getScattering());
-        }
-
-        channel = shader.enableTexture(LLShaderMgr::SINGLE_MIE_SCATTER_TEX, LLTexUnit::TT_TEXTURE_3D);
-        if (channel > -1)
-        {
-            shader.bindTexture(LLShaderMgr::SINGLE_MIE_SCATTER_TEX, gAtmosphere->getMieScattering());
-        }
-
-        channel = shader.enableTexture(LLShaderMgr::ILLUMINANCE_TEX, LLTexUnit::TT_TEXTURE);
-        if (channel > -1)
-        {
-            shader.bindTexture(LLShaderMgr::ILLUMINANCE_TEX, gAtmosphere->getIlluminance());
-        }
-    }
-
     /*if (gCubeSnapshot)
     { // we only really care about the first two values, but the shader needs increasing separation between clip planes
         shader.uniform4f(LLShaderMgr::DEFERRED_SHADOW_CLIP, 1.f, 64.f, 128.f, 256.f);
@@ -8266,26 +8224,6 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
     {
         shader.uniform4fv(LLShaderMgr::DEFERRED_SHADOW_CLIP, 1, mSunClipPlanes.mV);
     }
-    shader.uniform1f(LLShaderMgr::DEFERRED_SUN_WASH, RenderDeferredSunWash);
-    shader.uniform1f(LLShaderMgr::DEFERRED_SHADOW_NOISE, RenderShadowNoise);
-    shader.uniform1f(LLShaderMgr::DEFERRED_BLUR_SIZE, RenderShadowBlurSize);
-
-    shader.uniform1f(LLShaderMgr::DEFERRED_SSAO_RADIUS, RenderSSAOScale);
-    shader.uniform1f(LLShaderMgr::DEFERRED_SSAO_MAX_RADIUS, (GLfloat)RenderSSAOMaxScale);
-
-    F32 ssao_factor = RenderSSAOFactor;
-    shader.uniform1f(LLShaderMgr::DEFERRED_SSAO_FACTOR, ssao_factor);
-    shader.uniform1f(LLShaderMgr::DEFERRED_SSAO_FACTOR_INV, 1.0f/ssao_factor);
-
-    LLVector3 ssao_effect = RenderSSAOEffect;
-    F32 matrix_diag = (ssao_effect[0] + 2.0f*ssao_effect[1])/3.0f;
-    F32 matrix_nondiag = (ssao_effect[0] - ssao_effect[1])/3.0f;
-    // This matrix scales (proj of color onto <1/rt(3),1/rt(3),1/rt(3)>) by
-    // value factor, and scales remainder by saturation factor
-    F32 ssao_effect_mat[] = {   matrix_diag, matrix_nondiag, matrix_nondiag,
-                                matrix_nondiag, matrix_diag, matrix_nondiag,
-                                matrix_nondiag, matrix_nondiag, matrix_diag};
-    shader.uniformMatrix3fv(LLShaderMgr::DEFERRED_SSAO_EFFECT_MAT, 1, GL_FALSE, ssao_effect_mat);
 
     //F32 shadow_offset_error = 1.f + RenderShadowOffsetError * fabsf(LLViewerCamera::getInstance()->getOrigin().mV[2]);
     F32 shadow_bias_error = RenderShadowBiasError * fabsf(LLViewerCamera::getInstance()->getOrigin().mV[2])/3000.f;
@@ -8302,19 +8240,11 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
     shader.uniform3fv(LLShaderMgr::DEFERRED_MOON_DIR, 1, mTransformedMoonDir.mV);
     shader.uniform2f(LLShaderMgr::DEFERRED_SHADOW_RES, (GLfloat)mRT->shadow[0].getWidth(), (GLfloat)mRT->shadow[0].getHeight());
     shader.uniform2f(LLShaderMgr::DEFERRED_PROJ_SHADOW_RES, (GLfloat)mSpotShadow[0].getWidth(), (GLfloat)mSpotShadow[0].getHeight());
-    shader.uniform1f(LLShaderMgr::DEFERRED_DEPTH_CUTOFF, RenderEdgeDepthCutoff);
-    shader.uniform1f(LLShaderMgr::DEFERRED_NORM_CUTOFF, RenderEdgeNormCutoff);
 
     shader.uniformMatrix4fv(LLShaderMgr::MODELVIEW_DELTA_MATRIX, 1, GL_FALSE, glm::value_ptr(gGLDeltaModelView));
     shader.uniformMatrix4fv(LLShaderMgr::INVERSE_MODELVIEW_DELTA_MATRIX, 1, GL_FALSE, glm::value_ptr(gGLInverseDeltaModelView));
 
     shader.uniform1i(LLShaderMgr::CUBE_SNAPSHOT, gCubeSnapshot ? 1 : 0);
-
-    if (shader.getUniformLocation(LLShaderMgr::DEFERRED_NORM_MATRIX) >= 0)
-    {
-        glm::mat4 norm_mat = glm::transpose(glm::inverse(get_current_modelview()));
-        shader.uniformMatrix4fv(LLShaderMgr::DEFERRED_NORM_MATRIX, 1, false, glm::value_ptr(norm_mat));
-    }
 
     // auto adjust legacy sun color if needed
     static LLCachedControl<bool> should_auto_adjust(gSavedSettings, "RenderSkyAutoAdjustLegacy", false);
@@ -8409,19 +8339,36 @@ void LLPipeline::renderDeferredLighting()
                 LLGLSLShader& sun_shader = gCubeSnapshot ? gDeferredSunProbeProgram : gDeferredSunProgram;
                 bindDeferredShader(sun_shader, deferred_light_target);
                 mScreenTriangleVB->setBuffer();
-                glClearColor(1, 1, 1, 1);
-                deferred_light_target->clear(GL_COLOR_BUFFER_BIT);
-                glClearColor(0, 0, 0, 0);
+                deferred_light_target->invalidate(GL_COLOR_BUFFER_BIT);
 
                 sun_shader.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES,
                                               (GLfloat)deferred_light_target->getWidth(),
                                               (GLfloat)deferred_light_target->getHeight());
+
+                if (RenderDeferredSSAO && !gCubeSnapshot)
+                {
+                    sun_shader.uniform1f(LLShaderMgr::DEFERRED_SSAO_RADIUS, RenderSSAOScale);
+                    sun_shader.uniform1f(LLShaderMgr::DEFERRED_SSAO_MAX_RADIUS, (GLfloat)RenderSSAOMaxScale);
+
+                    F32 ssao_factor = RenderSSAOFactor;
+                    sun_shader.uniform1f(LLShaderMgr::DEFERRED_SSAO_FACTOR, ssao_factor);
+                    sun_shader.uniform1f(LLShaderMgr::DEFERRED_SSAO_FACTOR_INV, 1.0f / ssao_factor);
+
+                    S32 channel = sun_shader.enableTexture(LLShaderMgr::DEFERRED_NOISE);
+                    if (channel > -1)
+                    {
+                        gGL.getTexUnit(channel)->bindManual(LLTexUnit::TT_TEXTURE, mNoiseMap);
+                        gGL.getTexUnit(channel)->setTextureFilteringOption(LLTexUnit::TFO_POINT);
+                    }
+                }
 
                 {
                     LLGLDisable   blend(GL_BLEND);
                     LLGLDepthTest depth(GL_TRUE, GL_FALSE, GL_ALWAYS);
                     mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
                 }
+
+                sun_shader.disableTexture(LLShaderMgr::DEFERRED_NOISE);
 
                 unbindDeferredShader(sun_shader);
             }
@@ -8435,9 +8382,7 @@ void LLPipeline::renderDeferredLighting()
             LL_PROFILE_GPU_ZONE("soften shadow");
             // blur lightmap
             screen_target->bindTarget();
-            glClearColor(1, 1, 1, 1);
-            screen_target->clear(GL_COLOR_BUFFER_BIT);
-            glClearColor(0, 0, 0, 0);
+            screen_target->invalidate(GL_COLOR_BUFFER_BIT);
 
             bindDeferredShader(gDeferredBlurLightProgram);
 
@@ -8489,7 +8434,6 @@ void LLPipeline::renderDeferredLighting()
             deferred_light_target->flush();
             unbindDeferredShader(gDeferredBlurLightProgram);
         }
-
         screen_target->bindTarget();
         // clear color buffer here - zeroing alpha (glow) is important or it will accumulate against sky
         glClearColor(0, 0, 0, 0);
@@ -8517,6 +8461,19 @@ void LLPipeline::renderDeferredLighting()
             soften_shader.uniform3fv(LLShaderMgr::LIGHTNORM, 1, environment.getClampedLightNorm().mV);
 
             soften_shader.uniform4fv(LLShaderMgr::WATER_WATERPLANE, 1, LLDrawPoolAlpha::sWaterPlane.mV);
+
+            if(RenderDeferredSSAO)
+            {
+                LLVector3 ssao_effect = RenderSSAOEffect;
+                F32 matrix_diag = (ssao_effect[0] + 2.0f * ssao_effect[1]) / 3.0f;
+                F32 matrix_nondiag = (ssao_effect[0] - ssao_effect[1]) / 3.0f;
+                // This matrix scales (proj of color onto <1/rt(3),1/rt(3),1/rt(3)>) by
+                // value factor, and scales remainder by saturation factor
+                F32 ssao_effect_mat[] = { matrix_diag, matrix_nondiag, matrix_nondiag,
+                                            matrix_nondiag, matrix_diag, matrix_nondiag,
+                                            matrix_nondiag, matrix_nondiag, matrix_diag };
+                soften_shader.uniformMatrix3fv(LLShaderMgr::DEFERRED_SSAO_EFFECT_MAT, 1, GL_FALSE, ssao_effect_mat);
+            }
 
             {
                 LLGLDepthTest depth(GL_FALSE);
@@ -8757,13 +8714,12 @@ void LLPipeline::renderDeferredLighting()
                     LLDrawable* drawablep = *iter;
                     LLVOVolume* volume = drawablep->getVOVolume();
                     LLVector3   center = drawablep->getPositionAgent();
-                    F32* c = center.mV;
                     F32         light_size_final = volume->getLightRadius() * 1.5f;
                     F32         light_falloff_final = volume->getLightFalloff(DEFERRED_LIGHT_FALLOFF);
 
                     sVisibleLightCount++;
 
-                    glm::vec3 tc(glm::make_vec3(c));
+                    glm::vec3 tc(glm::make_vec3(LLVector4(center).mV));
                     tc = mul_mat4_vec3(mat, tc);
 
                     setupSpotLight(gDeferredMultiSpotLightProgram, drawablep);
@@ -9149,7 +9105,6 @@ void LLPipeline::unbindDeferredShader(LLGLSLShader &shader)
     shader.disableTexture(LLShaderMgr::DEFERRED_DEPTH, deferred_target->getUsage());
     shader.disableTexture(LLShaderMgr::DEFERRED_LIGHT, deferred_light_target->getUsage());
     shader.disableTexture(LLShaderMgr::DIFFUSE_MAP);
-    shader.disableTexture(LLShaderMgr::DEFERRED_BLOOM);
 
     for (U32 i = 0; i < 4; i++)
     {
@@ -9167,7 +9122,6 @@ void LLPipeline::unbindDeferredShader(LLGLSLShader &shader)
         }
     }
 
-    shader.disableTexture(LLShaderMgr::DEFERRED_NOISE);
     shader.disableTexture(LLShaderMgr::DEFERRED_LIGHTFUNC);
 
     if (!LLPipeline::sReflectionProbesEnabled)
@@ -10307,7 +10261,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
                         view[j] = glm::inverse(view[j]);
                         //llassert(origin.isFinite());
 
-                        glm::vec3 origin_agent(glm::make_vec3(origin.mV));
+                        glm::vec3 origin_agent(glm::make_vec3(LLVector4(origin).mV));
 
                         //translate view to origin
                         origin_agent = mul_mat4_vec3(view[j], origin_agent);
@@ -11397,21 +11351,24 @@ public:
     }
 };
 
-
+// Called from LLViewHighlightTransparent when "Highlight Transparent" is toggled
 void LLPipeline::rebuildDrawInfo()
 {
-    for (LLWorld::region_list_t::const_iterator iter = LLWorld::getInstance()->getRegionList().begin();
-        iter != LLWorld::getInstance()->getRegionList().end(); ++iter)
+    const U32 types_to_traverse[] =
     {
-        LLViewerRegion* region = *iter;
+        LLViewerRegion::PARTITION_VOLUME,
+        LLViewerRegion::PARTITION_BRIDGE,
+        LLViewerRegion::PARTITION_AVATAR
+    };
 
-        LLOctreeDirty dirty;
-
-        LLSpatialPartition* part = region->getSpatialPartition(LLViewerRegion::PARTITION_VOLUME);
-        dirty.traverse(part->mOctree);
-
-        part = region->getSpatialPartition(LLViewerRegion::PARTITION_BRIDGE);
-        dirty.traverse(part->mOctree);
+    LLOctreeDirty dirty;
+    for (LLViewerRegion* region : LLWorld::getInstance()->getRegionList())
+    {
+        for (U32 type : types_to_traverse)
+        {
+            LLSpatialPartition* part = region->getSpatialPartition(type);
+            dirty.traverse(part->mOctree);
+        }
     }
 }
 

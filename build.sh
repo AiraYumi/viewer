@@ -45,7 +45,7 @@ build_dir_Darwin()
 
 build_dir_Linux()
 {
-  echo build-linux-i686
+  echo build-linux-x86_64
 }
 
 build_dir_CYGWIN()
@@ -163,6 +163,22 @@ pre_build()
         fi
     fi
 
+    if [[ "$arch" == "Linux" ]]
+    then
+      # RELEASE_CRASH_REPORTING is tuned on unconditionaly, this is fine but not for Linux as of now (due to missing breakpad/crashpad support)
+      RELEASE_CRASH_REPORTING=OFF
+
+      # Builds turn on HAVOK even when config is ReleaseOS.
+      # This needs AUTOBUILD_GITHUB_TOKEN to be set in the environment. But this is not set for PRs apparently.
+      # Still this seemlingy works on Windows and Mac, why not on the Linux runner? Mystery to be solved elsewhere.
+
+
+      if [[ "$variant" == "ReleaseOS" ]]
+      then
+          HAVOK=OFF
+      fi
+    fi
+
     if [ "${RELEASE_CRASH_REPORTING:-}" != "OFF" ]
     then
         case "$arch" in
@@ -196,6 +212,7 @@ pre_build()
      -DVIEWER_CHANNEL:STRING="${viewer_channel}" \
      -DGRID:STRING="\"$viewer_grid\"" \
      -DTEMPLATE_VERIFIER_OPTIONS:STRING="$template_verifier_options" $template_verifier_master_url \
+     $CMAKE_OPTIONS \
      "${SIGNING[@]}" \
     || fatal "$variant configuration failed"
 

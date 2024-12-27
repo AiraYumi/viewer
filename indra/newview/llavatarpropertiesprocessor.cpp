@@ -31,6 +31,7 @@
 // Viewer includes
 #include "llagent.h"
 #include "llagentpicksinfo.h"
+#include "llappviewer.h"
 #include "lldateutil.h"
 #include "llviewergenericmessage.h"
 #include "llstartup.h"
@@ -368,10 +369,10 @@ void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_ur
         avatar_data.picks_list.emplace_back(pick_data["id"].asUUID(), pick_data["name"].asString());
     }
 
-    LLAppViewer::instance()->postToMainCoro(
-        [avatar_id, avatar_data, type]()
+    LLAppViewer::instance()->postToMainCoro([=]()
         {
-            LLAvatarPropertiesProcessor::instance().notifyObservers(avatar_id, (void*) &avatar_data, type);
+            LLAvatarData av_data = avatar_data;
+            instance().notifyObservers(avatar_id, &av_data, type);
         });
 }
 

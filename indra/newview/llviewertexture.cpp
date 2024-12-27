@@ -996,7 +996,7 @@ void LLViewerTexture::reorganizeVolumeList()
 
 bool LLViewerTexture::isLargeImage()
 {
-    return  (S32)mTexelsPerImage > LLViewerTexture::sMinLargeImageSize;
+    return getTexelsPerImage() > LLViewerTexture::sMinLargeImageSize;
 }
 
 //virtual
@@ -1209,11 +1209,10 @@ void LLViewerFetchedTexture::loadFromFastCache()
         record(LLTextureFetch::sCacheHitRate, LLUnits::Ratio::fromValue(1));
         sample(LLTextureFetch::sCacheReadLatency, cachReadTime);
 
-        mFullWidth = mRawImage->getWidth() << mRawDiscardLevel;
-        mFullHeight = mRawImage->getHeight() << mRawDiscardLevel;
-        setTexelsPerImage();
+        setDimensions(mRawImage->getWidth() << mRawDiscardLevel,
+                      mRawImage->getHeight() << mRawDiscardLevel);
 
-        if(mFullWidth > MAX_IMAGE_SIZE || mFullHeight > MAX_IMAGE_SIZE)
+        if (getFullWidth() > MAX_IMAGE_SIZE || getFullHeight() > MAX_IMAGE_SIZE)
         {
             //discard all oversized textures.
             destroyRawImage();
@@ -1291,7 +1290,7 @@ bool LLViewerFetchedTexture::isFullyLoaded() const
 {
     // Unfortunately, the boolean "mFullyLoaded" is never updated correctly so we use that logic
     // to check if the texture is there and completely downloaded
-    return (mFullWidth != 0) && (mFullHeight != 0) && !mIsFetching && !mHasFetcher;
+    return (getFullWidth() != 0) && (getFullHeight() != 0) && !mIsFetching && !mHasFetcher;
 }
 
 
@@ -1302,8 +1301,8 @@ void LLViewerFetchedTexture::dump()
 
     LL_INFOS() << "Dump : " << mID
             << ", mIsMissingAsset = " << (S32)mIsMissingAsset
-            << ", mFullWidth = " << (S32)mFullWidth
-            << ", mFullHeight = " << (S32)mFullHeight
+            << ", getFullWidth() = " << getFullWidth()
+            << ", getFullHeight() = " << getFullHeight()
             << ", mOrigWidth = " << (S32)mOrigWidth
             << ", mOrigHeight = " << (S32)mOrigHeight
             << LL_ENDL;
@@ -1430,14 +1429,12 @@ bool LLViewerFetchedTexture::preCreateTexture(S32 usename/*= 0*/)
             mRawImage->expandToPowerOfTwo(MAX_IMAGE_SIZE, false);
         }
 
-        mFullWidth = mRawImage->getWidth();
-        mFullHeight = mRawImage->getHeight();
-        setTexelsPerImage();
+        setDimensions(mRawImage->getWidth(), mRawImage->getHeight());
     }
     else
     {
-        mOrigWidth = mFullWidth;
-        mOrigHeight = mFullHeight;
+        mOrigWidth = getFullWidth();
+        mOrigHeight = getFullHeight();
     }
 
     bool size_okay = true;
@@ -1691,7 +1688,7 @@ void LLViewerFetchedTexture::processTextureStats()
         }
         else if (mDontDiscard && (mBoostLevel == LLGLTexture::BOOST_ICON || mBoostLevel == LLGLTexture::BOOST_THUMBNAIL))
         {
-            if (mFullWidth > MAX_IMAGE_SIZE_DEFAULT || mFullHeight > MAX_IMAGE_SIZE_DEFAULT)
+            if (getFullWidth() > MAX_IMAGE_SIZE_DEFAULT || getFullHeight() > MAX_IMAGE_SIZE_DEFAULT)
             {
                 mDesiredDiscardLevel = 1; // MAX_IMAGE_SIZE_DEFAULT = 2048 and max size ever is 4096
             }
@@ -1700,16 +1697,16 @@ void LLViewerFetchedTexture::processTextureStats()
                 mDesiredDiscardLevel = 0;
             }
         }
-        else if(!mFullWidth || !mFullHeight)
+        else if(!getFullWidth() || !getFullHeight())
         {
             mDesiredDiscardLevel =  llmin(getMaxDiscardLevel(), (S32)mLoadedCallbackDesiredDiscardLevel);
         }
         else
         {
             U32 desired_size = MAX_IMAGE_SIZE_DEFAULT; // MAX_IMAGE_SIZE_DEFAULT = 2048 and max size ever is 4096
-            if(!mKnownDrawWidth || !mKnownDrawHeight || (S32)mFullWidth <= mKnownDrawWidth || (S32)mFullHeight <= mKnownDrawHeight)
+            if(!mKnownDrawWidth || !mKnownDrawHeight || getFullWidth() <= mKnownDrawWidth || getFullHeight() <= mKnownDrawHeight)
             {
-                if (mFullWidth > desired_size || mFullHeight > desired_size)
+                if ((U32)getFullWidth() > desired_size || (U32)getFullHeight() > desired_size)
                 {
                     mDesiredDiscardLevel = 1;
                 }
@@ -1720,8 +1717,8 @@ void LLViewerFetchedTexture::processTextureStats()
             }
             else if(mKnownDrawSizeChanged)//known draw size is set
             {
-                mDesiredDiscardLevel = (S8)llmin(log((F32)mFullWidth / mKnownDrawWidth) / log_2,
-                                                     log((F32)mFullHeight / mKnownDrawHeight) / log_2);
+                mDesiredDiscardLevel = (S8)llmin(log((F32)getFullWidth() / mKnownDrawWidth) / log_2,
+                                                 log((F32)getFullHeight() / mKnownDrawHeight) / log_2);
                 mDesiredDiscardLevel =  llclamp(mDesiredDiscardLevel, (S8)0, (S8)getMaxDiscardLevel());
                 mDesiredDiscardLevel = llmin(mDesiredDiscardLevel, mMinDesiredDiscardLevel);
                 mDesiredDiscardLevel = llmin(mDesiredDiscardLevel, (S32)mLoadedCallbackDesiredDiscardLevel);
@@ -1806,14 +1803,10 @@ bool LLViewerFetchedTexture::processFetchResults(S32& desired_discard, S32 curre
             (current_discard < 0 || mRawDiscardLevel < current_discard))
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_TEXTURE("vftuf - data good");
+            setDimensions(mRawImage->getWidth() << mRawDiscardLevel,
+                mRawImage->getHeight() << mRawDiscardLevel);
 
-            // This is going to conflict with Develop, just pick from develop
-            // where it uses setDimensions instead of setTexelsPerImage
-            mFullWidth = mRawImage->getWidth() << mRawDiscardLevel;
-            mFullHeight = mRawImage->getHeight() << mRawDiscardLevel;
-            setTexelsPerImage();
-
-            if (mFullWidth > MAX_IMAGE_SIZE || mFullHeight > MAX_IMAGE_SIZE)
+            if (getFullWidth() > MAX_IMAGE_SIZE || getFullHeight() > MAX_IMAGE_SIZE)
             {
                 //discard all oversized textures.
                 destroyRawImage();
@@ -2912,7 +2905,7 @@ LLViewerLODTexture::LLViewerLODTexture(const std::string& url, FTType f_type, co
 
 void LLViewerLODTexture::init(bool firstinit)
 {
-    mTexelsPerImage = 64*64;
+    setTexelsPerImage(64 * 64);
     mDiscardVirtualSize = 0.f;
     mCalculatedDiscardLevel = -1.f;
 }
@@ -2955,7 +2948,7 @@ void LLViewerLODTexture::processTextureStats()
     else if (mDontDiscard || !mUseMipMaps)
     {
         mDesiredDiscardLevel = 0;
-        if (mFullWidth > MAX_IMAGE_SIZE_DEFAULT || mFullHeight > MAX_IMAGE_SIZE_DEFAULT)
+        if (getFullWidth() > MAX_IMAGE_SIZE_DEFAULT || getFullHeight() > MAX_IMAGE_SIZE_DEFAULT)
             mDesiredDiscardLevel = 1; // MAX_IMAGE_SIZE_DEFAULT = 2048 and max size ever is 4096
     }
     else if (mBoostLevel < LLGLTexture::BOOST_HIGH && mMaxVirtualSize <= 10.f)
@@ -2964,7 +2957,7 @@ void LLViewerLODTexture::processTextureStats()
         mDesiredDiscardLevel = llmin(mMinDesiredDiscardLevel, (S8)(MAX_DISCARD_LEVEL + 1));
         mDesiredDiscardLevel = llmin(mDesiredDiscardLevel, (S32)mLoadedCallbackDesiredDiscardLevel);
     }
-    else if (!mFullWidth  || !mFullHeight)
+    else if (!getFullWidth()  || !getFullHeight())
     {
         mDesiredDiscardLevel =  getMaxDiscardLevel();
         mDesiredDiscardLevel = llmin(mDesiredDiscardLevel, (S32)mLoadedCallbackDesiredDiscardLevel);
@@ -2987,12 +2980,12 @@ void LLViewerLODTexture::processTextureStats()
             // Use log_4 because we're in square-pixel space, so an image
             // with twice the width and twice the height will have mTexelsPerImage
             // 4 * draw_size
-            discard_level = (F32)(log(mTexelsPerImage / draw_texels) / log_4);
+            discard_level = (F32)(log(getTexelsPerImage() / draw_texels) / log_4);
         }
         else
         {
             // Calculate the required scale factor of the image using pixels per texel
-            discard_level = (F32)(log(mTexelsPerImage / mMaxVirtualSize) / log_4);
+            discard_level = (F32)(log(getTexelsPerImage() / mMaxVirtualSize) / log_4);
             mDiscardVirtualSize = mMaxVirtualSize;
             mCalculatedDiscardLevel = discard_level;
         }
@@ -3005,8 +2998,10 @@ void LLViewerLODTexture::processTextureStats()
         {
             desired_size = DESIRED_NORMAL_TEXTURE_SIZE;
         }
-        if (mFullWidth > desired_size || mFullHeight > desired_size)
+        if ((U32)getFullWidth() > desired_size || (U32)getFullHeight() > desired_size)
+        {
             min_discard = 1.f;
+        }
 
         discard_level = llclamp(discard_level, min_discard, (F32)MAX_DISCARD_LEVEL);
 
@@ -3544,7 +3539,7 @@ void LLViewerMediaTexture::setPlaying(bool playing)
         {
             LLFace* facep = *iter;
             const LLTextureEntry* te = facep->getTextureEntry();
-            if (te->getGLTFMaterial())
+            if (te && te->getGLTFMaterial())
             {
                 // PBR material, switch emissive and basecolor
                 switchTexture(LLRender::EMISSIVE_MAP, *iter);

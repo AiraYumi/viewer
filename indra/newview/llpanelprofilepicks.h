@@ -138,6 +138,8 @@ public:
     void setParcelID(const LLUUID& parcel_id) override { mParcelId = parcel_id; }
     void setErrorStatus(S32 status, const std::string& reason) override {};
 
+    void addLocationChangedCallbacks();
+
   protected:
 
     /**
@@ -200,6 +202,16 @@ public:
     void resetDirty() override;
 
     /**
+     * Callback for "CreateLandmark" button click
+     */
+    void onClickCreateLandmark();
+
+    /**
+     * Callback for "Set Location" button click
+     */
+    void onClickSetLocation();
+
+    /**
      * Callback for "Save" and "Create" button click
      */
     void onClickSave();
@@ -221,6 +233,8 @@ protected:
     LLTextureCtrl*      mSnapshotCtrl;
     LLLineEditor*       mPickName;
     LLTextEditor*       mPickDescription;
+    LLButton*           mCreateLandmarkButton;
+    LLButton*           mSetCurrentLocationButton;
     LLButton*           mSaveButton;
     LLButton*           mCreateButton;
     LLButton*           mCancelButton;
@@ -236,7 +250,7 @@ protected:
 
     bool mLocationChanged;
     bool mNewPick;
-    bool                mIsEditing;
+    bool mIsEditing;
 
     void onDescriptionFocusReceived();
 };

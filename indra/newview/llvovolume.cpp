@@ -250,10 +250,12 @@ LLVOVolume::~LLVOVolume()
     delete mVolumeImpl;
     mVolumeImpl = NULL;
 
-    gMeshRepo.unregisterMesh(this);
+    unregisterOldMeshAndSkin();
 
     if(!mMediaImplList.empty())
     {
+        LL_PROFILE_ZONE_NAMED_CATEGORY_MEDIA("delete volume media list");
+
         for(U32 i = 0 ; i < mMediaImplList.size() ; i++)
         {
             if(mMediaImplList[i].notNull())
@@ -1037,6 +1039,28 @@ LLDrawable *LLVOVolume::createDrawable(LLPipeline *pipeline)
 
     return mDrawable;
 }
+
+// Inverse of gMeshRepo.loadMesh and gMeshRepo.getSkinInfo, combined into one function
+// Assume a Collada mesh never changes after being set.
+void LLVOVolume::unregisterOldMeshAndSkin()
+{
+    if (mVolumep)
+    {
+        const LLVolumeParams& params = mVolumep->getParams();
+        if ((params.getSculptType() & LL_SCULPT_TYPE_MASK) == LL_SCULPT_TYPE_MESH)
+        {
+            // object is being deleted, so it will no longer need to request
+            // meshes.
+            for (S32 lod = 0; lod != LLVolumeLODGroup::NUM_LODS; ++lod)
+            {
+                gMeshRepo.unregisterMesh(this, params, lod);
+            }
+            // This volume may or may not have a skin
+            gMeshRepo.unregisterSkinInfo(params.getSculptID(), this);
+        }
+    }
+}
+
 
 bool LLVOVolume::setVolume(const LLVolumeParams &params_in, const S32 detail, bool unique_volume)
 {
@@ -5407,7 +5431,7 @@ void LLVolumeGeometryManager::registerFace(LLSpatialGroup* group, LLFace* facep,
         info->mEnd - draw_vec[idx]->mStart + facep->getGeomCount() <= (U32) gGLManager.mGLMaxVertexRange &&
         info->mCount + facep->getIndicesCount() <= (U32) gGLManager.mGLMaxIndexRange &&
 #endif
-        info->mMaterialID == mat_id &&
+        info->mMaterialHash == mat_id &&
         info->mFullbright == fullbright &&
         info->mBump == bump &&
         (!mat || (info->mShiny == shiny)) && // need to break batches when a material is shared, but legacy settings are different
@@ -5466,11 +5490,11 @@ void LLVolumeGeometryManager::registerFace(LLSpatialGroup* group, LLFace* facep,
         if (gltf_mat)
         {
             // just remember the material ID, render pools will reference the GLTF material
-            draw_info->mMaterialID = mat_id;
+            draw_info->mMaterialHash = mat_id;
         }
         else if (mat)
         {
-            draw_info->mMaterialID = mat_id;
+            draw_info->mMaterialHash = mat_id;
 
             // We have a material.  Update our draw info accordingly.
 
@@ -5502,10 +5526,10 @@ void LLVolumeGeometryManager::registerFace(LLSpatialGroup* group, LLFace* facep,
             }
         }
 
-        // if (type == LLRenderPass::PASS_ALPHA) // always populate the draw_info ptr
-        { //for alpha sorting
-            facep->setDrawInfo(draw_info);
-        }
+        // This backpointer is used by alpha sorting and avatar attachment
+        // accounting.
+        // To be safe, always populate the draw_info ptr.
+        facep->setDrawInfo(draw_info);
 
         if (index < FACE_DO_NOT_BATCH_TEXTURES)
         { //initialize texture list for texture batching
@@ -5819,8 +5843,7 @@ void LLVolumeGeometryManager::rebuildGeom(LLSpatialGroup* group)
                     {
                         type = LLDrawPool::POOL_GLTF_PBR;
                     }
-                    else
-                    if (type != LLDrawPool::POOL_ALPHA && force_simple)
+                    else if (type != LLDrawPool::POOL_ALPHA && force_simple)
                     {
                         type = LLDrawPool::POOL_SIMPLE;
                     }
@@ -5903,10 +5926,10 @@ void LLVolumeGeometryManager::rebuildGeom(LLSpatialGroup* group)
                                 if (gltf_mat != nullptr)
                                 {
                                     // In theory, we should never actually get here with alpha blending.
-                                    // How this is supposed to work is we check if the surface is alpha blended, and we assign it to the
-                                    // alpha draw pool. For rigged meshes, this apparently may not happen consistently. For now, just
-                                    // discard it here if the alpha is 0 (fully transparent) to achieve parity with blinn-phong materials in
-                                    // function.
+                                    // How this is supposed to work is we check if the surface is alpha blended, and we assign it to the alpha draw pool.
+                                    // For rigged meshes, this apparently may not happen consistently.
+                                    // For now, just discard it here if the alpha is 0 (fully transparent) to achieve parity with blinn-phong materials in function.
+
                                     bool should_render = true;
                                     if (gltf_mat->mAlphaMode == LLGLTFMaterial::ALPHA_MODE_BLEND)
                                     {
@@ -5915,6 +5938,7 @@ void LLVolumeGeometryManager::rebuildGeom(LLSpatialGroup* group)
                                             should_render = false;
                                         }
                                     }
+
                                     if (should_render)
                                     {
                                         add_face(sPbrFaces, pbr_count, facep);
@@ -6144,7 +6168,7 @@ void LLVolumeGeometryManager::rebuildMesh(LLSpatialGroup* group)
                 LLVertexBuffer::flushBuffers();
             }
 
-            group->clearState(LLSpatialGroup::MESH_DIRTY | LLSpatialGroup::NEW_DRAWINFO);
+            group->clearState(LLSpatialGroup::MESH_DIRTY);
         }
     }
 }

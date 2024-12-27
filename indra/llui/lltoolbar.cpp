@@ -144,7 +144,7 @@ void LLToolBar::createContextMenu()
     {
         // Setup bindings specific to this instance for the context menu options
 
-        LLUICtrl::CommitCallbackRegistry::ScopedRegistrar commit_reg;
+        ScopedRegistrarHelper commit_reg;
         commit_reg.add("Toolbars.EnableSetting", boost::bind(&LLToolBar::onSettingEnable, this, _2));
         commit_reg.add("Toolbars.RemoveSelectedCommand", boost::bind(&LLToolBar::onRemoveSelectedCommand, this));
 

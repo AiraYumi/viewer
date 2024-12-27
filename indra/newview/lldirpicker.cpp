@@ -45,6 +45,13 @@
 #include <shlobj.h>
 #endif
 
+#if LL_NFD
+#include "nfd.hpp"
+#if LL_USE_SDL_WINDOW
+#include "nfd_sdl2.h"
+#endif
+#endif
+
 //
 // Implementation
 //
@@ -65,7 +72,95 @@ bool LLDirPicker::check_local_file_access_enabled()
     return true;
 }
 
-#if LL_WINDOWS
+#if LL_NFD
+
+LLDirPicker::LLDirPicker() :
+    mFileName(nullptr),
+    mLocked(false)
+{
+    reset();
+}
+
+LLDirPicker::~LLDirPicker()
+{
+}
+
+
+void LLDirPicker::reset()
+{
+    mDir.clear();
+}
+
+bool LLDirPicker::getDir(std::string* filename, bool blocking)
+{
+    if( mLocked )
+    {
+        return false;
+    }
+
+    // if local file browsing is turned off, return without opening dialog
+    if ( check_local_file_access_enabled() == false )
+    {
+        return false;
+    }
+
+    bool success = false;
+
+    if (blocking)
+    {
+        // Modal, so pause agent
+        send_agent_pause();
+    }
+
+    // initialize NFD
+    NFD::Guard nfdGuard;
+
+    // auto-freeing memory
+    NFD::UniquePath outPath;
+
+    nfdwindowhandle_t windowHandle = nfdwindowhandle_t();
+#if LL_USE_SDL_WINDOW
+    if(!NFD_GetNativeWindowFromSDLWindow((SDL_Window*)gViewerWindow->getPlatformWindow(), &windowHandle))
+    {
+        windowHandle = nfdwindowhandle_t();
+    }
+#elif LL_WINDOWS
+    windowHandle = { NFD_WINDOW_HANDLE_TYPE_WINDOWS, gViewerWindow->getWindow()->getPlatformWindow() };
+#endif
+
+    // show the dialog
+    nfdresult_t result = NFD::PickFolder(outPath, nullptr, windowHandle);
+    if (result == NFD_OKAY)
+    {
+        mDir = std::string(outPath.get());
+        success = true;
+    }
+    else if (result == NFD_CANCEL)
+    {
+        LL_INFOS() << "User pressed cancel." << LL_ENDL;
+    }
+    else
+    {
+        LL_INFOS() << "DirPicker Error: " << NFD::GetError() << LL_ENDL;
+    }
+
+    if (blocking)
+    {
+        send_agent_resume();
+
+        // Account for the fact that the app has been stalled.
+        LLFrameTimer::updateFrameTime();
+    }
+
+    return success;
+}
+
+std::string LLDirPicker::getDirName()
+{
+    return mDir;
+}
+
+#elif LL_WINDOWS
 
 LLDirPicker::LLDirPicker() :
     mFileName(NULL),
@@ -240,23 +335,6 @@ bool LLDirPicker::getDir(std::string* filename, bool blocking)
         return false;
     }
 
-#if !LL_MESA_HEADLESS
-
-    if (mFilePicker)
-    {
-        GtkWindow* picker = mFilePicker->buildFilePicker(false, true,
-                                 "dirpicker");
-
-        if (picker)
-        {
-           gtk_window_set_title(GTK_WINDOW(picker), LLTrans::getString("choose_the_directory").c_str());
-           gtk_widget_show_all(GTK_WIDGET(picker));
-           gtk_main();
-           return (!mFilePicker->getFirstFile().empty());
-        }
-    }
-#endif // !LL_MESA_HEADLESS
-
     return false;
 }
 
@@ -303,7 +381,7 @@ std::queue<LLDirPickerThread*> LLDirPickerThread::sDeadQ;
 
 void LLDirPickerThread::getFile()
 {
-#if LL_WINDOWS
+#if LL_WINDOWS || (LL_NFD && !LL_DARWIN)
     start();
 #else
     run();
@@ -313,7 +391,7 @@ void LLDirPickerThread::getFile()
 //virtual
 void LLDirPickerThread::run()
 {
-#if LL_WINDOWS
+#if LL_WINDOWS || (LL_NFD && !LL_DARWIN)
     bool blocking = false;
 #else
     bool blocking = true; // modal

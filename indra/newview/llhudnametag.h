@@ -68,6 +68,8 @@ protected:
         LLColor4                mColor;
         LLFontGL::StyleFlags    mStyle;
         const LLFontGL*         mFont;
+        LLFontVertexBuffer      mFontBufferLabel;
+        LLFontVertexBuffer      mFontBufferText;
     private:
         LLWString               mText;
         std::map<const LLFontGL*, F32> mFontWidthMap;

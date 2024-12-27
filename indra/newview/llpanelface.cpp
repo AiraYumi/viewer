@@ -470,7 +470,7 @@ LLPanelFace::LLPanelFace()
     mNeedMediaTitle(true)
 {
     USE_TEXTURE = LLTrans::getString("use_texture");
-    mCommitCallbackRegistrar.add("PanelFace.menuDoToSelected", boost::bind(&LLPanelFace::menuDoToSelected, this, _2));
+    mCommitCallbackRegistrar.add("PanelFace.menuDoToSelected", { boost::bind(&LLPanelFace::menuDoToSelected, this, _2) });
     mEnableCallbackRegistrar.add("PanelFace.menuEnable", boost::bind(&LLPanelFace::menuEnableItem, this, _2));
 }
 
@@ -4404,8 +4404,7 @@ void LLPanelFace::onPasteTexture(LLViewerObject* objectp, S32 te)
             if (te_data["te"].has("pbr"))
             {
                 objectp->setRenderMaterialID(te, te_data["te"]["pbr"].asUUID(), false /*managing our own update*/);
-                tep->setGLTFRenderMaterial(nullptr);
-                tep->setGLTFMaterialOverride(nullptr);
+                objectp->setTEGLTFMaterialOverride(te, nullptr);
 
                 LLSD override_data;
                 override_data["object_id"] = objectp->getID();
@@ -4426,8 +4425,7 @@ void LLPanelFace::onPasteTexture(LLViewerObject* objectp, S32 te)
             else
             {
                 objectp->setRenderMaterialID(te, LLUUID::null, false /*send in bulk later*/ );
-                tep->setGLTFRenderMaterial(nullptr);
-                tep->setGLTFMaterialOverride(nullptr);
+                objectp->setTEGLTFMaterialOverride(te, nullptr);
 
                 // blank out most override data on the server
                 LLGLTFMaterialList::queueApply(objectp, te, LLUUID::null);
@@ -5199,4 +5197,3 @@ void LLPanelFace::LLSelectedTE::getMaxDiffuseRepeats(F32& repeats, bool& identic
     } max_diff_repeats_func;
     identical = LLSelectMgr::getInstance()->getSelection()->getSelectedTEValue( &max_diff_repeats_func, repeats );
 }
-
