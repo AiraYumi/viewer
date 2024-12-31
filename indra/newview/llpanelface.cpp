@@ -1832,14 +1832,13 @@ public:
         mChangePending = false;
     }
 
-    void operator() const noexcept = delete;
-
     ~PBRPickerAgentListener() override
     {
         gInventory.removeObserver(this);
         mChangePending = false;
     }
 };
+void std::default_delete<PBRPickerAgentListener>::operator()(PBRPickerAgentListener * ptr) const noexcept { delete ptr; }
 
 // One-off listener that updates the build floater UI when the prim inventory updates
 class PBRPickerObjectListener : public LLVOInventoryListener
@@ -1873,14 +1872,13 @@ public:
         mChangePending = false;
     }
 
-    void operator() const noexcept = delete;
-
     ~PBRPickerObjectListener()
     {
         removeVOInventoryListener();
         mChangePending = false;
     }
 };
+void std::default_delete<PBRPickerObjectListener>::operator()(PBRPickerObjectListener * ptr) const noexcept { delete ptr; }
 
 void LLPanelFace::updateUIGLTF(LLViewerObject* objectp, bool& has_pbr_material, bool& has_faces_without_pbr, bool force_set_values)
 {
