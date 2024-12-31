@@ -104,6 +104,10 @@ public:
     virtual bool    postBuild();
     LLPanelFace();
     virtual ~LLPanelFace();
+    LLPanelFace(const LLPanelFace&) = delete;  // copy constructor
+    LLPanelFace(LLPanelFace&&) = delete;       // move constructor
+    LLPanelFace& operator=(const LLPanelFace&) = delete;  // copy assignment operator
+    LLPanelFace& operator=(LLPanelFace&&) = delete;       // move assignment operator
 
     void            refresh();
     void            refreshMedia();
