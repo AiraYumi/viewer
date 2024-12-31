@@ -1837,6 +1837,10 @@ public:
         gInventory.removeObserver(this);
         mChangePending = false;
     }
+    PBRPickerAgentListener(const PBRPickerAgentListener&) = delete;  // copy constructor
+    PBRPickerAgentListener(PBRPickerAgentListener&&) = delete;       // move constructor
+    PBRPickerAgentListener& operator=(const PBRPickerAgentListener&) = delete;  // copy assignment operator
+    PBRPickerAgentListener& operator=(PBRPickerAgentListener&&) = delete;       // move assignment operator
 };
 
 // One-off listener that updates the build floater UI when the prim inventory updates
@@ -1876,6 +1880,10 @@ public:
         removeVOInventoryListener();
         mChangePending = false;
     }
+    PBRPickerObjectListener(const PBRPickerObjectListener&) = delete;  // copy constructor
+    PBRPickerObjectListener(PBRPickerObjectListener&&) = delete;       // move constructor
+    PBRPickerObjectListener& operator=(const PBRPickerObjectListener&) = delete;  // copy assignment operator
+    PBRPickerObjectListener& operator=(PBRPickerObjectListener&&) = delete;       // move assignment operator
 };
 
 void LLPanelFace::updateUIGLTF(LLViewerObject* objectp, bool& has_pbr_material, bool& has_faces_without_pbr, bool force_set_values)
