@@ -98,6 +98,91 @@ public:
     virtual DataType get(LLTextureEntry* entry) { return (entry*(TEGetFunc)); }
 };
 
+// One-off listener that updates the build floater UI when the agent inventory adds or removes an item
+class PBRPickerAgentListener : public LLInventoryObserver
+{
+protected:
+    bool mChangePending = true;
+public:
+    PBRPickerAgentListener() : LLInventoryObserver()
+    {
+        gInventory.addObserver(this);
+    }
+
+    const bool isListening()
+    {
+        return mChangePending;
+    }
+
+    void changed(U32 mask) override
+    {
+        if (!(mask & (ADD | REMOVE)))
+        {
+            return;
+        }
+
+        if (gFloaterTools)
+        {
+            gFloaterTools->dirty();
+        }
+        gInventory.removeObserver(this);
+        mChangePending = false;
+    }
+
+    ~PBRPickerAgentListener() override
+    {
+        gInventory.removeObserver(this);
+        mChangePending = false;
+    }
+    PBRPickerAgentListener(const PBRPickerAgentListener&) = delete;  // copy constructor
+    PBRPickerAgentListener(PBRPickerAgentListener&&) = delete;       // move constructor
+    PBRPickerAgentListener& operator=(const PBRPickerAgentListener&) = delete;  // copy assignment operator
+    PBRPickerAgentListener& operator=(PBRPickerAgentListener&&) = delete;       // move assignment operator
+};
+
+// One-off listener that updates the build floater UI when the prim inventory updates
+class PBRPickerObjectListener : public LLVOInventoryListener
+{
+protected:
+    LLViewerObject* mObjectp;
+    bool mChangePending = true;
+public:
+
+    PBRPickerObjectListener(LLViewerObject* object)
+    : mObjectp(object)
+    {
+        registerVOInventoryListener(mObjectp, nullptr);
+    }
+
+    const bool isListeningFor(const LLViewerObject* objectp) const
+    {
+        return mChangePending && (objectp == mObjectp);
+    }
+
+    void inventoryChanged(LLViewerObject* object,
+                          LLInventoryObject::object_list_t* inventory,
+                          S32 serial_num,
+                          void* user_data) override
+                          {
+                              if (gFloaterTools)
+                              {
+                                  gFloaterTools->dirty();
+                              }
+                              removeVOInventoryListener();
+                              mChangePending = false;
+                          }
+
+                          ~PBRPickerObjectListener()
+                          {
+                              removeVOInventoryListener();
+                              mChangePending = false;
+                          }
+                          PBRPickerObjectListener(const PBRPickerObjectListener&) = delete;  // copy constructor
+                          PBRPickerObjectListener(PBRPickerObjectListener&&) = delete;       // move constructor
+                          PBRPickerObjectListener& operator=(const PBRPickerObjectListener&) = delete;  // copy assignment operator
+                          PBRPickerObjectListener& operator=(PBRPickerObjectListener&&) = delete;       // move assignment operator
+};
+
 class LLPanelFace : public LLPanel
 {
 public:
