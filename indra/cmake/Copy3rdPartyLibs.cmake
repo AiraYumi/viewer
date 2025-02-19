@@ -55,6 +55,7 @@ if(WINDOWS)
     set(release_files
         openjp2.dll
         SDL2.dll
+        SDL3.dll
         )
 
     if(LLCOMMON_LINK_SHARED)
@@ -171,7 +172,8 @@ elseif(DARWIN)
     set(release_files
         libndofdev.dylib
         libSDL2.dylib
-        libSDL2-2.0.dylib
+        libSDL3.dylib
+        libSDL3.0.dylib
        )
 
     if(LLCOMMON_LINK_SHARED)
@@ -214,6 +216,7 @@ elseif(LINUX)
     # *FIX - figure out what to do with duplicate libalut.so here -brad
     set(release_files
         libSDL2-2.0.so.0
+        libSDL3.so.0
         )
 
      if( USE_AUTOBUILD_3P )

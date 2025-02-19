@@ -592,6 +592,9 @@ class Windows_x86_64_Manifest(ViewerManifest):
             # SDL2
             self.path("SDL2.dll")
 
+            # SDL3
+            self.path("SDL3.dll")
+
             # BugSplat
             if self.args.get('bugsplat'):
                 self.path("BsSndRpt64.exe")
@@ -936,7 +939,8 @@ class Darwin_x86_64_Manifest(ViewerManifest):
 
                 with self.prefix(src=relpkgdir, dst=""):
                     self.path("libndofdev.dylib")
-                    self.path("libSDL2-*.dylib")
+                    self.path("libSDL2*.dylib")
+                    self.path("libSDL3*.dylib")
 
                 with self.prefix(src_dst="cursors_mac"):
                     self.path("*.tif")
@@ -1038,7 +1042,13 @@ class Darwin_x86_64_Manifest(ViewerManifest):
 
                 # SDL2
                 for libfile in (
-                            'libSDL2-2.0.dylib',
+                            'libSDL2.dylib',
+                            ):
+                    dylibs += path_optional(os.path.join(relpkgdir, libfile), libfile)
+
+                # SDL3
+                for libfile in (
+                            'libSDL3.dylib',
                             ):
                     dylibs += path_optional(os.path.join(relpkgdir, libfile), libfile)
 
