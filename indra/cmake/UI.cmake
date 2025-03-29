@@ -29,6 +29,7 @@ if (LINUX)
           pangoxft-1.0
           Xinerama
           ll::freetype
+          ll::SDL2
           )
 endif (LINUX)
 if( WINDOWS )

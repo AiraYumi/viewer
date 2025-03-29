@@ -11,6 +11,10 @@
 #
 #   Also realize that CMAKE_CXX_FLAGS may already be partially populated on
 #   entry to this file.
+#
+#   Additionally CMAKE_C_FLAGS is prepended to CMAKE_CXX_FLAGS_RELEASE and
+#   CMAKE_CXX_FLAGS_RELWITHDEBINFO which risks having flags overriden by cmake
+#   inserting additional options that are part of the build config type.
 #*****************************************************************************
 include_guard()
 
@@ -113,46 +117,64 @@ endif (WINDOWS)
 
 
 if (LINUX)
-  set(CMAKE_SKIP_RPATH TRUE)
+  set( CMAKE_BUILD_WITH_INSTALL_RPATH TRUE )
+  set( CMAKE_INSTALL_RPATH $ORIGIN $ORIGIN/../lib )
+  set(CMAKE_EXE_LINKER_FLAGS "-Wl,--exclude-libs,ALL")
 
-   # EXTERNAL_TOS
-   # force this platform to accept TOS via external browser
+  find_program(CCACHE_EXE ccache)
+  if(CCACHE_EXE AND NOT DISABLE_CCACHE)
+    set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_EXE} )
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_EXE} )
+  endif()
 
-   # LL_IGNORE_SIGCHLD
-   # don't catch SIGCHLD in our base application class for the viewer - some of
-   # our 3rd party libs may need their *own* SIGCHLD handler to work. Sigh! The
-   # viewer doesn't need to catch SIGCHLD anyway.
+  # LL_IGNORE_SIGCHLD
+  # don't catch SIGCHLD in our base application class for the viewer - some of
+  # our 3rd party libs may need their *own* SIGCHLD handler to work. Sigh! The
+  # viewer doesn't need to catch SIGCHLD anyway.
 
   add_compile_definitions(
           _REENTRANT
-          _FORTIFY_SOURCE=2
-          EXTERNAL_TOS
           APPID=secondlife
           LL_IGNORE_SIGCHLD
   )
+
+  if( ENABLE_ASAN )
+      add_compile_options(-U_FORTIFY_SOURCE
+        -fsanitize=address
+        --param asan-stack=0
+      )
+      add_link_options(-fsanitize=address)
+  else()
+   add_compile_definitions( _FORTIFY_SOURCE=2 )
+  endif()
+
   add_compile_options(
-          -fexceptions
-          -fno-math-errno
-          -fno-strict-aliasing
-          -fsigned-char
-          -msse2
-          -mfpmath=sse
-          -pthread
-          -Wno-parentheses
-          -Wno-deprecated
-          -fvisibility=hidden
+      -fexceptions
+      -fno-math-errno
+      -fno-strict-aliasing
+      -fsigned-char
+      -msse2
+      -mfpmath=sse
+      -pthread
+      -fvisibility=hidden
   )
 
-  if (ADDRESS_SIZE EQUAL 32)
-    add_compile_options(-march=pentium4)
-  endif (ADDRESS_SIZE EQUAL 32)
+  add_link_options(
+          -Wl,--no-keep-memory
+          -Wl,--build-id
+          -Wl,--no-undefined
+  )
 
   # this stops us requiring a really recent glibc at runtime
   add_compile_options(-fno-stack-protector)
-  # linking can be very memory-hungry, especially the final viewer link
-  set(CMAKE_CXX_LINK_FLAGS "-Wl,--no-keep-memory")
 
-  set(CMAKE_CXX_FLAGS_DEBUG "-fno-inline ${CMAKE_CXX_FLAGS_DEBUG}")
+  if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    # ND: clang is a bit more picky than GCC, the latter seems to auto include -lstdc++ and -lm. The former not so and thus fails to link
+    add_link_options(
+            -lstdc++
+            -lm
+    )
+  endif()
 endif (LINUX)
 
 
@@ -182,19 +204,17 @@ endif (DARWIN)
 if (LINUX OR DARWIN)
   set(GCC_WARNINGS -Wall -Wno-sign-compare -Wno-trigraphs)
 
-  if (NOT GCC_DISABLE_FATAL_WARNINGS)
-    list(APPEND GCC_WARNINGS -Werror)
-  endif (NOT GCC_DISABLE_FATAL_WARNINGS)
+if(LINUX OR DARWIN)
+  add_compile_options(-Wall -Wno-sign-compare -Wno-trigraphs -Wno-reorder -Wno-unused-but-set-variable -Wno-unused-variable -Wno-unused-local-typedef)
 
-  list(APPEND GCC_WARNINGS -Wno-reorder -Wno-non-virtual-dtor )
-
-  if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 13)
-    list(APPEND GCC_WARNINGS -Wno-unused-but-set-variable -Wno-unused-variable )
+  if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    add_compile_options(-Wno-stringop-truncation -Wno-parentheses -Wno-c++20-compat)
   endif()
+
+  if (NOT GCC_DISABLE_FATAL_WARNINGS AND NOT CLANG_DISABLE_FATAL_WARNINGS)
+    add_compile_options(-Werror)
+  endif (NOT GCC_DISABLE_FATAL_WARNINGS AND NOT CLANG_DISABLE_FATAL_WARNINGS)
 
   add_compile_options(${GCC_WARNINGS})
   add_compile_options(-m${ADDRESS_SIZE})
 endif (LINUX OR DARWIN)
-
-
-

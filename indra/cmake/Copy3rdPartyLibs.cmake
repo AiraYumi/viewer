@@ -137,7 +137,7 @@ if(WINDOWS)
             vcruntime${MSVC_VER}_1.dll
             vcruntime${MSVC_VER}_threads.dll
             )
-        if(redist_path AND EXISTS "${redist_path}/${release_msvc_file}")
+        if(DEFINED redist_path AND EXISTS "${redist_path}/${release_msvc_file}")
             MESSAGE(STATUS "Copying redist file from ${redist_path}/${release_msvc_file}")
             to_staging_dirs(
                 ${redist_path}
@@ -210,20 +210,13 @@ elseif(LINUX)
     set(release_src_dir "${ARCH_PREBUILT_DIRS_RELEASE}")
     # *FIX - figure out what to do with duplicate libalut.so here -brad
     set(release_files
-       )
+        libSDL2-2.0.so.0
+        )
 
      if( USE_AUTOBUILD_3P )
          list( APPEND release_files
-                 libatk-1.0.so
-                 libfreetype.so.6.6.2
-                 libfreetype.so.6
-                 libopenjp2.so
-                 libuuid.so.16
-                 libuuid.so.16.0.22
-                 libfontconfig.so.1.8.0
-                 libfontconfig.so.1
-                 libgmodule-2.0.so
-                 libgobject-2.0.so
+                 libapr-1.so.0
+                 libaprutil-1.so.0
                  )
 
         if(LLCOMMON_LINK_SHARED)
