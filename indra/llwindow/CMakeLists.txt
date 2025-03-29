@@ -18,6 +18,7 @@ include(LLWindow)
 include(UI)
 include(ViewerMiscLibs)
 include(GLM)
+include(SDL2)
 
 set(llwindow_SOURCE_FILES
     llcursortypes.cpp
@@ -58,7 +59,7 @@ set(llwindow_LINK_LIBRARIES
         ll::glm
         ll::glext
         ll::uilibraries
-        ll::SDL
+        ll::SDL2
         )
 # Libraries on which this library depends, needed for Linux builds
 # Sort by high-level to low-level
@@ -172,15 +173,15 @@ endif (llwindow_HEADER_FILES)
     ${viewer_SOURCE_FILES}
     )
 
-if (SDL_FOUND)
+if (SDL2_FOUND)
   set_property(TARGET llwindow
     PROPERTY COMPILE_DEFINITIONS LL_SDL=1
     )
-endif (SDL_FOUND)
+endif (SDL2_FOUND)
 
   target_link_libraries (llwindow ${llwindow_LINK_LIBRARIES})
   target_include_directories(llwindow INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
-  
+
 if (DARWIN)
   include(CMakeFindFrameworks)
   find_library(CARBON_LIBRARY Carbon)

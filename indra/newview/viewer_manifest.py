@@ -1307,7 +1307,7 @@ class Linux_i686_Manifest(LinuxManifest):
         with self.prefix(src=relpkgdir, dst="lib"):
             self.path("libdb*.so")
             self.path("libuuid.so*")
-            self.path("libSDL-1.2.so.*")
+            self.path_optional("libSDL*.so.*")
             self.path("libdirectfb-1.*.so.*")
             self.path("libfusion-1.*.so.*")
             self.path("libdirect-1.*.so.*")
