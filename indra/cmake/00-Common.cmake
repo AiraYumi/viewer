@@ -199,10 +199,7 @@ if (DARWIN)
   # required for clang-15/xcode-15 since our boost package still uses deprecated std::unary_function/binary_function
   # see https://developer.apple.com/documentation/xcode-release-notes/xcode-15-release-notes#C++-Standard-Library
   add_compile_definitions(_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION)
-endif (DARWIN)
-
-if (LINUX OR DARWIN)
-  set(GCC_WARNINGS -Wall -Wno-sign-compare -Wno-trigraphs)
+endif(DARWIN)
 
 if(LINUX OR DARWIN)
   add_compile_options(-Wall -Wno-sign-compare -Wno-trigraphs -Wno-reorder -Wno-unused-but-set-variable -Wno-unused-variable -Wno-unused-local-typedef)
