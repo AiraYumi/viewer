@@ -7,7 +7,7 @@
     <string>autobuild</string>
     <key>installables</key>
     <map>
-      <key>SDL</key>
+      <key>SDL2</key>
       <map>
         <key>platforms</key>
         <map>
@@ -16,9 +16,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>7ea2df03bfc35c06acf23dd9e734adac</string>
+              <string>27a431140f6f3f12f00b6a38f741fab43caa7708</string>
+              <key>hash_algorithm</key>
+              <string>sha1</string>
               <key>url</key>
-              <string>http://automated-builds-secondlife-com.s3.amazonaws.com/ct2/1103/2554/SDL-1.2.15-linux64-501092.tar.bz2</string>
+              <string>https://github.com/secondlife/3p-sdl2/releases/download/v2.30.8-r1/SDL2-2.30.8-linux64-11540565100.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -1273,36 +1275,6 @@
         <key>description</key>
         <string>PNG Reference library</string>
       </map>
-      <key>libuuid</key>
-      <map>
-        <key>platforms</key>
-        <map>
-          <key>linux64</key>
-          <map>
-            <key>archive</key>
-            <map>
-              <key>hash</key>
-              <string>fb89f1281dd54d8b99b339fc5b712b27</string>
-              <key>url</key>
-              <string>http://automated-builds-secondlife-com.s3.amazonaws.com/hg/repo/p64_3p-libuuid/rev/314269/arch/Linux/installer/libuuid-1.6.2-linux64-314269.tar.bz2</string>
-            </map>
-            <key>name</key>
-            <string>linux64</string>
-          </map>
-        </map>
-        <key>license</key>
-        <string>UUID</string>
-        <key>license_file</key>
-        <string>LICENSES/uuid.txt</string>
-        <key>copyright</key>
-        <string>Copyright (c) 2004-2008 The OSSP Project &lt;http://www.ossp.org/&gt;</string>
-        <key>version</key>
-        <string>1.6.2</string>
-        <key>name</key>
-        <string>libuuid</string>
-        <key>description</key>
-        <string>OSSP uuid is a ISO-C:1999 application programming interface (API) and corresponding command line interface (CLI) for the generation of DCE 1.1, ISO/IEC 11578:1996 and RFC 4122 compliant Universally Unique Identifier (UUID). </string>
-      </map>
       <key>libxml2</key>
       <map>
         <key>platforms</key>
@@ -1591,32 +1563,6 @@
         <string>1.0.561752</string>
         <key>name</key>
         <string>llphysicsextensions_tpv</string>
-      </map>
-      <key>mesa</key>
-      <map>
-        <key>platforms</key>
-        <map>
-          <key>linux</key>
-          <map>
-            <key>archive</key>
-            <map>
-              <key>hash</key>
-              <string>22c50a5d362cad311b4f413cfcffbba2</string>
-              <key>url</key>
-              <string>http://automated-builds-secondlife-com.s3.amazonaws.com/hg/repo/mesa_3p-update-mesa/rev/297294/arch/Linux/installer/mesa-7.11.1.297294-linux-297294.tar.bz2</string>
-            </map>
-            <key>name</key>
-            <string>linux</string>
-          </map>
-        </map>
-        <key>license</key>
-        <string>mesa</string>
-        <key>license_file</key>
-        <string>LICENSES/mesa.txt</string>
-        <key>version</key>
-        <string>7.11.1.297294</string>
-        <key>name</key>
-        <string>mesa</string>
       </map>
       <key>meshoptimizer</key>
       <map>
@@ -2433,11 +2379,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>226225ec049826c35adc5e897e0398ed64d4bedb</string>
+              <string>0c3d01b7e9e39c23f0f40c56a1a04d1fba08ead0</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-tracy/releases/download/v0.11.0%2Br1/tracy-v0.11.0.10376230034-darwin64-10376230034.tar.zst</string>
+              <string>https://github.com/secondlife/3p-tracy/releases/download/v0.11.1-r1/tracy-v0.11.1.11706699176-darwin64-11706699176.tar.zst</string>
             </map>
             <key>name</key>
             <string>darwin64</string>
@@ -2447,11 +2393,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>8c5429d1a1486f40cf7e5e88a232222d1fa4f78e</string>
+              <string>b46cef5646a8d0471ab6256fe5119220fa238772</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-tracy/releases/download/v0.11.0%2Br1/tracy-v0.11.0.10376230034-windows64-10376230034.tar.zst</string>
+              <string>https://github.com/secondlife/3p-tracy/releases/download/v0.11.1-r1/tracy-v0.11.1.11706699176-windows64-11706699176.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -2461,11 +2407,11 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>ed0664a009aba1dcf1246d845839f524e857162e</string>
+              <string>beab04c9ea6036b1851a485b65c66cf6a38f0be4</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-tracy/releases/download/v0.11.0%2Br1/tracy-v0.11.0.10376230034-linux64-10376230034.tar.zst</string>
+              <string>https://github.com/secondlife/3p-tracy/releases/download/v0.11.1-r1/tracy-v0.11.1.11706699176-linux64-11706699176.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -2478,7 +2424,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
         <key>copyright</key>
         <string>Copyright (c) 2017-2024, Bartosz Taudul (wolf@nereid.pl)</string>
         <key>version</key>
-        <string>v0.11.0.10376230034</string>
+        <string>v0.11.1.11706699176</string>
         <key>name</key>
         <string>tracy</string>
         <key>canonical_repo</key>
