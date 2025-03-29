@@ -33,11 +33,7 @@
         <key>copyright</key>
         <string>Copyright (C) 1997-2012 Sam Lantinga</string>
         <key>version</key>
-        <string>1.2.15</string>
-        <key>name</key>
-        <string>SDL</string>
-        <key>description</key>
-        <string>Simple DirectMedia Layer is a cross-platform multimedia library designed to provide low level access to audio, keyboard, mouse, joystick, 3D hardware via OpenGL, and 2D video framebuffer.</string>
+        <string>2.30.8</string>
       </map>
       <key>apr_suite</key>
       <map>
