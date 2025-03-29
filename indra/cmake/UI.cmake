@@ -28,6 +28,7 @@ if (LINUX)
           pangox-1.0
           pangoxft-1.0
           Xinerama
+          ll::fontconfig
           ll::freetype
           ll::SDL2
           )
