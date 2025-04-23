@@ -7,8 +7,18 @@
     <string>autobuild</string>
     <key>installables</key>
     <map>
-      <key>SDL</key>
+      <key>SDL2</key>
       <map>
+        <key>copyright</key>
+        <string>Copyright (C) 1997-2022 Sam Lantinga (slouken@libsdl.org)</string>
+        <key>description</key>
+        <string>Simple DirectMedia Layer is a cross-platform multimedia library designed to provide low level access to audio, keyboard, mouse, joystick, 3D hardware via OpenGL, and 2D video framebuffer.</string>
+        <key>license</key>
+        <string>lgpl</string>
+        <key>license_file</key>
+        <string>LICENSES/SDL2.txt</string>
+        <key>name</key>
+        <string>SDL2</string>
         <key>platforms</key>
         <map>
           <key>linux64</key>
@@ -16,26 +26,18 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>7ea2df03bfc35c06acf23dd9e734adac</string>
+              <string>27a431140f6f3f12f00b6a38f741fab43caa7708</string>
+              <key>hash_algorithm</key>
+              <string>sha1</string>
               <key>url</key>
-              <string>http://automated-builds-secondlife-com.s3.amazonaws.com/ct2/1103/2554/SDL-1.2.15-linux64-501092.tar.bz2</string>
+              <string>https://github.com/secondlife/3p-sdl2/releases/download/v2.30.8-r1/SDL2-2.30.8-linux64-11540565100.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
           </map>
         </map>
-        <key>license</key>
-        <string>lgpl</string>
-        <key>license_file</key>
-        <string>LICENSES/SDL.txt</string>
-        <key>copyright</key>
-        <string>Copyright (C) 1997-2012 Sam Lantinga</string>
         <key>version</key>
-        <string>1.2.15</string>
-        <key>name</key>
-        <string>SDL</string>
-        <key>description</key>
-        <string>Simple DirectMedia Layer is a cross-platform multimedia library designed to provide low level access to audio, keyboard, mouse, joystick, 3D hardware via OpenGL, and 2D video framebuffer.</string>
+        <string>2.30.8</string>
       </map>
       <key>apr_suite</key>
       <map>
@@ -270,11 +272,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>d5fb3832a338bbe4891b823c64fdb4806706568e</string>
+              <string>e21e7755fe740d5ed30bd29441170449a57caa8b</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-cubemap_to_eqr_js/releases/download/v1.1.0-d7afe27/cubemaptoequirectangular-1.1.0-darwin64-d7afe27.tar.zst</string>
+              <string>https://github.com/secondlife/3p-cubemap_to_eqr_js/releases/download/v1.1.0-cb8785a/cubemaptoequirectangular-1.1.0-darwin64-cb8785a.tar.zst</string>
             </map>
             <key>name</key>
             <string>darwin64</string>
@@ -284,11 +286,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>77c53daf558f51aec6e9f4bd9e930a103630ee7d</string>
+              <string>aea0bed0f953a9371b9091f09230b41597f891f7</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-cubemap_to_eqr_js/releases/download/v1.1.0-d7afe27/cubemaptoequirectangular-1.1.0-linux64-d7afe27.tar.zst</string>
+              <string>https://github.com/secondlife/3p-cubemap_to_eqr_js/releases/download/v1.1.0-cb8785a/cubemaptoequirectangular-1.1.0-linux64-cb8785a.tar.zst</string>
             </map>
           </map>
           <key>windows64</key>
@@ -296,11 +298,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>6c51855bcf3a8628289881fdaea08c25cf7b1b90</string>
+              <string>eabc3b0c9d9084f49b8a4dc5d3834d77f668c27a</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-cubemap_to_eqr_js/releases/download/v1.1.0-d7afe27/cubemaptoequirectangular-1.1.0-windows64-d7afe27.tar.zst</string>
+              <string>https://github.com/secondlife/3p-cubemap_to_eqr_js/releases/download/v1.1.0-cb8785a/cubemaptoequirectangular-1.1.0-windows64-cb8785a.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -916,11 +918,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>f271809c0d4244128fb52a71226a4d7674e14e0a</string>
+              <string>b05374300cdd40c381614f2ee4497de340eda991</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-jpeg_encoder_js/releases/download/v1.0-9165e47/jpegencoderbasic-1.0-darwin64-9165e47.tar.zst</string>
+              <string>https://github.com/secondlife/3p-jpeg_encoder_js/releases/download/v1.0-790015a/jpegencoderbasic-1.0-darwin64-790015a.tar.zst</string>
             </map>
             <key>name</key>
             <string>darwin64</string>
@@ -930,11 +932,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>35d6a617444fde9c8a5e998ef29dc43b95747637</string>
+              <string>23daab838f4b8f92e5dc1a2f6c568cb7b0cb43b7</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-jpeg_encoder_js/releases/download/v1.0-9165e47/jpegencoderbasic-1.0-linux64-9165e47.tar.zst</string>
+              <string>https://github.com/secondlife/3p-jpeg_encoder_js/releases/download/v1.0-790015a/jpegencoderbasic-1.0-linux64-790015a.tar.zst</string>
             </map>
           </map>
           <key>windows64</key>
@@ -942,11 +944,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>8ec22e9fc8734ba3d1826f4b88171a6017cc8676</string>
+              <string>23e8ba22aadf88d249a21844bfcdd01138c05937</string>
               <key>hash_algorithm</key>
               <string>sha1</string>
               <key>url</key>
-              <string>https://github.com/secondlife/3p-jpeg_encoder_js/releases/download/v1.0-9165e47/jpegencoderbasic-1.0-windows64-9165e47.tar.zst</string>
+              <string>https://github.com/secondlife/3p-jpeg_encoder_js/releases/download/v1.0-790015a/jpegencoderbasic-1.0-windows64-790015a.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -2017,6 +2019,23 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
       </map>
       <key>open-libndofdev</key>
       <map>
+        <key>platforms</key>
+        <map>
+          <key>linux64</key>
+          <map>
+            <key>archive</key>
+            <map>
+              <key>hash</key>
+              <string>cbbcf3c5341e4ff4f956c0de960dc238faf20d54</string>
+              <key>hash_algorithm</key>
+              <string>sha1</string>
+              <key>url</key>
+              <string>https://github.com/secondlife/3p-open-libndofdev/releases/download/v1.14-r4/open_libndofdev-0.14.11545940352-linux64-11545940352.tar.zst</string>
+            </map>
+            <key>name</key>
+            <string>linux64</string>
+          </map>
+        </map>
         <key>license</key>
         <string>BSD</string>
         <key>license_file</key>
