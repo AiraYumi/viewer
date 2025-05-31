@@ -32,10 +32,10 @@ jobs:
 
           if [[ "$FROM_FORK" == "true" ]]; then
             # PR from fork; don't build with Bugsplat, proprietary libs
-            echo 'configurations=["ReleaseOS"]' >> $GITHUB_OUTPUT
+            echo 'configurations=["RelWithDebInfoOS"]' >> $GITHUB_OUTPUT
             echo "bugsplat_db=" >> $GITHUB_OUTPUT
           else
-            echo 'configurations=["Release"]' >> $GITHUB_OUTPUT
+            echo 'configurations=["RelWithDebInfo"]' >> $GITHUB_OUTPUT
             echo "bugsplat_db=SecondLife_Viewer_2018" >> $GITHUB_OUTPUT
           fi
   build:
