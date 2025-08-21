@@ -576,10 +576,6 @@ class Windows_x86_64_Manifest(ViewerManifest):
             self.path_optional("vcruntime140_1.dll")
             self.path_optional("vcruntime140_threads.dll")
 
-            # SLVoice executable
-            with self.prefix(src=os.path.join(pkgdir, 'bin', 'release')):
-                self.path("SLVoice.exe")
-
             # Vivox libraries
             self.path("vivoxsdk_x64.dll")
             self.path("ortp_x64.dll")
@@ -1008,9 +1004,6 @@ class Darwin_x86_64_Manifest(ViewerManifest):
                 # Need to get the llcommon dll from any of the build directories as well.
                 libfile_parent = self.get_dst_prefix()
                 dylibs=[]
-                # SLVoice executable
-                with self.prefix(src=os.path.join(pkgdir, 'bin', 'release')):
-                    self.path("SLVoice")
 
                 # Vivox libraries
                 for libfile in (
@@ -1354,8 +1347,6 @@ class Linux_i686_Manifest(LinuxManifest):
                 pass
 
         # Vivox runtimes
-        with self.prefix(src=relpkgdir, dst="bin"):
-            self.path("SLVoice")
         with self.prefix(src=relpkgdir, dst="lib"):
             self.path("libortp.so")
             self.path("libsndfile.so.1")
