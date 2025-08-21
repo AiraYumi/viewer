@@ -3,7 +3,7 @@ name: Build
 on:
   pull_request:
   push:
-    branches: ["main", "release/*", "project/*"]
+    branches: ["main*", "release/*", "project/*"]
     tags: ["Second_Life*"]
 
 jobs:
@@ -30,14 +30,8 @@ jobs:
         run: |
           echo "release_run=$RELEASE_RUN" >> "$GITHUB_OUTPUT"
 
-          if [[ "$FROM_FORK" == "true" ]]; then
-            # PR from fork; don't build with Bugsplat, proprietary libs
-            echo 'configurations=["ReleaseOS"]' >> $GITHUB_OUTPUT
-            echo "bugsplat_db=" >> $GITHUB_OUTPUT
-          else
-            echo 'configurations=["Release"]' >> $GITHUB_OUTPUT
-            echo "bugsplat_db=SecondLife_Viewer_2018" >> $GITHUB_OUTPUT
-          fi
+          echo 'configurations=["ReleaseOS"]' >> $GITHUB_OUTPUT
+          echo "bugsplat_db=" >> $GITHUB_OUTPUT
   build:
     needs: setup
     strategy:
