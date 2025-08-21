@@ -32,10 +32,6 @@ if(WINDOWS)
     # ND, it seems there is no such thing defined. At least when building a viewer
     # Does this maybe matter on some LL buildserver? Otherwise this and the snippet using slvoice_src_dir
     # can all go
-    if( ARCH_PREBUILT_BIN_RELEASE )
-        set(slvoice_src_dir "${ARCH_PREBUILT_BIN_RELEASE}")
-    endif()
-    set(slvoice_files SLVoice.exe )
     if (ADDRESS_SIZE EQUAL 64)
         list(APPEND vivox_libs
             vivoxsdk_x64.dll
@@ -158,7 +154,6 @@ if(WINDOWS)
 
 elseif(DARWIN)
     set(vivox_lib_dir "${ARCH_PREBUILT_DIRS_RELEASE}")
-    set(slvoice_files SLVoice)
     set(vivox_libs
         libortp.dylib
         libvivoxsdk.dylib
@@ -198,7 +193,6 @@ elseif(LINUX)
         libvivoxoal.so.1
         libvivoxsdk.so
         )
-    set(slvoice_files SLVoice)
 
     # *TODO - update this to use LIBS_PREBUILT_DIR and LL_ARCH_DIR variables
     # or ARCH_PREBUILT_DIRS
@@ -263,15 +257,6 @@ endif(WINDOWS)
 # It's unclear whether this is oversight or intentional, but anyway leave the
 # single copy_if_different command rather than using to_staging_dirs.
 
-if( slvoice_src_dir )
-    copy_if_different(
-            ${slvoice_src_dir}
-            "${SHARED_LIB_STAGING_DIR_RELEASE}"
-            out_targets
-            ${slvoice_files}
-    )
-    list(APPEND third_party_targets ${out_targets})
-endif()
 
 to_staging_dirs(
     ${vivox_lib_dir}
