@@ -16,9 +16,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>7ea2df03bfc35c06acf23dd9e734adac</string>
+              <string>f7d9728ef2b4bac084cec2d68b62ce7c3e3b5043</string>
+              <key>hash_algorithm</key>
+              <string>sha1</string>
               <key>url</key>
-              <string>http://automated-builds-secondlife-com.s3.amazonaws.com/ct2/1103/2554/SDL-1.2.15-linux64-501092.tar.bz2</string>
+              <string>https://github.com/AiraYumi/3p-sdl3/releases/download/v3.2.18_13b3614/SDL3-3.2.18_13b3614-linux64-16690502284.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>

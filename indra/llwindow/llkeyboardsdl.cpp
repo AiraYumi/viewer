@@ -154,7 +154,7 @@ LLKeyboardSDL::LLKeyboardSDL()
 
 void LLKeyboardSDL::resetMaskKeys()
 {
-    SDLMod mask = SDL_GetModState();
+    SDL_Keymod mask = SDL_GetModState();
 
     // MBW -- XXX -- This mirrors the operation of the Windows version of resetMaskKeys().
     //    It looks a bit suspicious, as it won't correct for keys that have been released.
@@ -268,7 +268,7 @@ bool LLKeyboardSDL::handleKeyUp(const U16 key, const U32 mask)
 MASK LLKeyboardSDL::currentMask(bool for_mouse_event)
 {
     MASK result = MASK_NONE;
-    SDLMod mask = SDL_GetModState();
+    SDL_Keymod mask = SDL_GetModState();
 
     if (mask & KMOD_SHIFT)          result |= MASK_SHIFT;
     if (mask & KMOD_CTRL)           result |= MASK_CONTROL;

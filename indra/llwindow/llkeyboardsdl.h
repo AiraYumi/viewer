@@ -28,7 +28,7 @@
 #define LL_LLKEYBOARDSDL_H
 
 #include "llkeyboard.h"
-#include "SDL/SDL.h"
+#include "SDL3/SDL.h"
 
 class LLKeyboardSDL : public LLKeyboard
 {
