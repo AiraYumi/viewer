@@ -19,5 +19,8 @@ target_link_libraries(ll::libcurl INTERFACE ${CURL_LIBRARY} ll::openssl ll::nght
 if (DARWIN)
     target_link_libraries(ll::libcurl INTERFACE "-framework SystemConfiguration")
 endif(DARWIN)
+if (WINDOWS)
+    target_link_libraries(ll::libcurl INTERFACE Iphlpapi.lib)
+endif(WINDOWS)
 
 target_include_directories( ll::libcurl SYSTEM INTERFACE ${LIBS_PREBUILT_DIR}/include)
