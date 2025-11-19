@@ -16,4 +16,10 @@ find_library(CURL_LIBRARY
 
 target_link_libraries(ll::libcurl INTERFACE ${CURL_LIBRARY} ll::openssl ll::nghttp2 ll::zlib-ng)
 
+if (DARWIN)
+    target_link_libraries(ll::libcurl INTERFACE "-framework SystemConfiguration")
+elseif(WINDOWS)
+    target_link_libraries(ll::libcurl INTERFACE Iphlpapi.lib)
+endif(DARWIN)
+
 target_include_directories( ll::libcurl SYSTEM INTERFACE ${LIBS_PREBUILT_DIR}/include)
